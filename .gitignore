@@ -5,7 +5,6 @@ out/
 
 # build
 *.log
-package-lock.json
 
 # env
 .env
