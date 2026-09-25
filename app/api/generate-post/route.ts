@@ -49,7 +49,23 @@ export async function POST(req: NextRequest) {
     const hcfg = ganchos?.config as { items?: string[] } | null;
     if (hcfg?.items?.length) hook = hcfg.items[Math.floor(Math.random() * hcfg.items.length)];
   }
-  const affLink = toAffiliateLink(url, affId, store);
+  let convertedVia: 'api' | 'tag' = 'tag';
+  let short: string | null = null;
+  if (store === 'shopee' && userId) {
+    // Conversão oficial via API (gera shope.ee comissionável)
+    const api = await prisma.integration.findUnique({ where: { userId_provider: { userId, provider: 'shopee_api' } } }).catch(() => null);
+    const acfg = api?.config as { appId?: string; secret?: string } | null;
+    if (acfg?.appId && acfg?.secret) {
+      try {
+        const { shopeeShortLink } = await import('../../../lib/shopee');
+        short = await shopeeShortLink(url.split('?')[0], ['cupomradar'], { appId: acfg.appId, secret: acfg.secret });
+        convertedVia = 'api';
+      } catch {
+        // cai para o modo tag
+      }
+    }
+  }
+  const affLink = short || toAffiliateLink(url, affId, store);
   let text: string;
   if (template) {
     text = template
@@ -77,5 +93,5 @@ export async function POST(req: NextRequest) {
       }
     }
   }
-  return NextResponse.json({ store, affiliateLink: affLink, text, autoSent });
+  return NextResponse.json({ store, affiliateLink: affLink, text, autoSent, convertedVia });
 }

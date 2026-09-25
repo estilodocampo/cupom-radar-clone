@@ -50,31 +50,61 @@ function toAffiliateLink(originalUrl, affiliateId, store) {
   return `${base}?af=${affiliateId}`;
 }
 
-function convertTextLinks(text, affIds) {
-  let converted = 0;
-  const out = text.replace(/https?:\/\/[^\s)]+/g, (url) => {
-    const store = detectStore(url);
-    const id = affIds[store];
-    if (store === 'unknown' || !id) return url;
-    converted++;
-    return toAffiliateLink(url.replace(/[.,!?]+$/, ''), id, store);
+const crypto = require('crypto');
+
+async function shopeeShortLink(originUrl, subIds, creds) {
+  const query = `mutation { generateShortLink(input: { originUrl: ${JSON.stringify(originUrl)}, subIds: ${JSON.stringify(subIds.slice(0, 5))} }) { shortLink } }`;
+  const payload = JSON.stringify({ query });
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = crypto.createHash('sha256').update(creds.appId + timestamp + payload + creds.secret).digest('hex');
+  const res = await fetch('https://open-api.affiliate.shopee.com.br/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `SHA256 Credential=${creds.appId}, Timestamp=${timestamp}, Signature=${signature}` },
+    body: payload,
   });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.errors?.length) throw new Error(data.errors?.[0]?.message || `Shopee API ${res.status}`);
+  if (!data.data?.generateShortLink?.shortLink) throw new Error('Shopee: sem shortLink');
+  return data.data.generateShortLink.shortLink;
+}
+
+async function convertTextLinks(text, affIds, shopeeCreds) {
+  let converted = 0;
+  const urls = [...new Set(text.match(/https?:\/\/[^\s)]+/g) || [])];
+  let out = text;
+  for (let raw of urls) {
+    const url = raw.replace(/[.,!?]+$/, '');
+    const store = detectStore(url);
+    try {
+      if (store === 'shopee' && shopeeCreds) {
+        const short = await shopeeShortLink(url.split('?')[0], ['cupomradar'], shopeeCreds);
+        out = out.split(raw).join(short);
+        converted++;
+      } else if (store !== 'unknown' && affIds[store]) {
+        out = out.split(raw).join(toAffiliateLink(url, affIds[store], store));
+        converted++;
+      }
+    } catch (e) {
+      log.warn({ e: String(e).slice(0, 150) }, 'conversao shopee falhou, mantendo original');
+    }
+  }
   return { out, converted };
 }
 
 async function loadCopiadores() {
   if (!pool) return;
   try {
-    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8)', ['copiador', 'shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'lista_envio']);
+    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8,$9)', ['copiador', 'shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'lista_envio', 'shopee_api']);
     const byUser = {};
     for (const r of rows) {
       byUser[r.userId] = byUser[r.userId] || { affIds: {} };
       if (r.provider === 'copiador') byUser[r.userId].copiador = r.config || {};
+      else if (r.provider === 'shopee_api' && r.config && r.config.appId && r.config.secret) byUser[r.userId].shopeeCreds = { appId: r.config.appId, secret: r.config.secret };
       else if (r.provider && r.config && r.config.affiliateId) byUser[r.userId].affIds[r.provider] = r.config.affiliateId;
     }
     copiadores = Object.entries(byUser)
       .filter(([, v]) => v.copiador && v.copiador.source)
-      .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], affIds: v.affIds }));
+      .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], affIds: v.affIds, shopeeCreds: v.shopeeCreds || null }));
     if (copiadores.length) log.info({ n: copiadores.length }, 'copiadores ativos');
   } catch (e) {
     log.warn({ e: String(e) }, 'load copiadores falhou');
@@ -100,7 +130,7 @@ async function handleCopiador(msg) {
   if (!text || !/https?:\/\//.test(text)) return;
   for (const c of copiadores) {
     if (c.source !== remote || !c.targets.length) continue;
-    const { out, converted } = convertTextLinks(text, c.affIds);
+    const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds);
     if (!converted) continue;
     for (const t of c.targets) {
       try {

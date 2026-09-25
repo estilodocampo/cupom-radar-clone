@@ -26,6 +26,8 @@ export default function Robo() {
   const [modal, setModal] = useState<Modal>(null);
   const [done, setDone] = useState(false);
   const [mlOk, setMlOk] = useState(false);
+  const [shAppId, setShAppId] = useState('');
+  const [shSecret, setShSecret] = useState('');
 
   async function load() {
     const s = await fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null);
@@ -39,6 +41,7 @@ export default function Robo() {
     for (const it of integ?.items || []) {
       if (it.provider === 'telegram') setTg((it.config?.botToken as string) || '');
       else if (it.provider === 'mercadolivre_oauth') setMlOk(true);
+      else if (it.provider === 'shopee_api') { setShAppId((it.config?.appId as string) || ''); setShSecret((it.config?.secret as string) || ''); }
       else if (it.provider === 'templates') { const m = (it.config || {}) as Record<string, string>; setTplMap(m); setTplText((prev) => prev || m[tplStore] || ''); }
       else if (it.provider === 'cupons') { const m = (it.config || {}) as Record<string, string>; setCpMap(m); setCpText((prev) => prev || m[cpStore] || ''); }
       else if (it.provider === 'ganchos') setHooks(((it.config?.items as string[]) || []).join('\n'));
@@ -179,11 +182,23 @@ export default function Robo() {
                 <h3><span className="store-logo">{storeCfg(modal.store).name}</span></h3>
                 <p className="hint">{storeCfg(modal.store).desc}</p>
                 <input className="input" value={forms[modal.store] || ''} onChange={(e) => setForms({ ...forms, [modal.store]: e.target.value })} placeholder={storeCfg(modal.store).field} />
+                {modal.store === 'shopee' && (
+                  <>
+                    <label className="lbl">App ID da API de afiliado</label>
+                    <input className="input" value={shAppId} onChange={(e) => setShAppId(e.target.value)} placeholder="App ID" />
+                    <label className="lbl">Secret da API</label>
+                    <input className="input" value={shSecret} onChange={(e) => setShSecret(e.target.value)} placeholder="Secret" type="password" />
+                    <p className="hint">Com App ID + Secret, os links saem como shope.ee comissionáveis via API oficial.</p>
+                  </>
+                )}
                 {modal.store === 'mercadolivre' && (
                   <p className="hint">Conta ML: {mlOk ? 'conectada ✓' : 'não conectada'} — <a href="/api/integrations/mercadolivre/auth">Conectar conta</a> (exige APP ID e Secret cadastrados no servidor)</p>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-primary btn-sm" onClick={() => save(modal.store, { affiliateId: forms[modal.store] || '' })}>{done ? 'Salvo ✓' : 'Salvar'}</button>
+                  <button className="btn btn-primary btn-sm" onClick={async () => {
+                    await save(modal.store, { affiliateId: forms[modal.store] || '' });
+                    if (modal.store === 'shopee' && shAppId && shSecret) await save('shopee_api', { appId: shAppId, secret: shSecret });
+                  }}>{done ? 'Salvo ✓' : 'Salvar'}</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>Fechar</button>
                 </div>
               </>
