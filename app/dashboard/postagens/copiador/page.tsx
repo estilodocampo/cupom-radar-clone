@@ -24,6 +24,7 @@ export default function Copiador() {
   const [minInterval, setMinInterval] = useState(0);
   const [maxPerDay, setMaxPerDay] = useState(0);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [fila, setFila] = useState(0);
 
   useEffect(() => {
     Promise.all([
@@ -42,6 +43,13 @@ export default function Copiador() {
       setPicked(saved.filter((t) => gl.some((x) => x.id === t)));
       setExtra(saved.filter((t) => !gl.some((x) => x.id === t)).join('\n'));
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const load = () => fetch('/api/whatsapp/status').then((r) => r.json()).then((d) => setFila(Number(d?.fila) || 0)).catch(() => {});
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
   }, []);
 
   function toggle(id: string) {
@@ -97,7 +105,10 @@ export default function Copiador() {
             </select>
           </div>
         </div>
-        <p className="hint">Evita inundar seu grupo. As ofertas acima do limite são ignoradas (nada é enviado depois).</p>
+        <p className="hint">
+          Limite a inundação do grupo <b>sem perder oferta</b>: o que não cabe na hora entra em fila e sai assim que a janela abre.
+        </p>
+        {fila > 0 && <p className="hint">⏳ <b>{fila}</b> oferta(s) aguardando envio na fila.</p>}
 
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 }}>
           <input type="checkbox" checked={keepCoupons} onChange={(e) => setKeepCoupons(e.target.checked)} /> Manter cupons da origem

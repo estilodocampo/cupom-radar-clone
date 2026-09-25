@@ -112,8 +112,28 @@ model DispatchLog {
   groupJid  String
   message   String   @db.Text
   status    String
+  kind      String?
   error     String?
   sentAt    DateTime @default(now())
+}
+
+// Fila: ofertas aguardando a janela de frequência (nada é descartado)
+model QueuedOffer {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String
+  targetJid String
+  text      String    @db.Text
+  mediaType String?
+  media     String?   @db.Text
+  fp        String
+  status    String    @default("pending")
+  error     String?
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+
+  @@unique([userId, kind, fp, targetJid])
+  @@index([status, createdAt])
 }
 
 model Integration {

@@ -14,7 +14,7 @@ async function call(path: string, init?: RequestInit) {
 }
 
 export const worker = {
-  status: () => call('/status'),
+  status: () => call('/status') as Promise<{ connected?: boolean; phone?: string; fila?: number; distribuidores?: number; copiadores?: number }>,
   qr: () => call('/qr'),
   groups: () => call('/groups') as Promise<{ groups: { id: string; name: string }[] }>,
   participants: (groupJid: string) =>

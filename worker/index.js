@@ -336,27 +336,95 @@ function extractText(msg) {
 // Chave de contagem: separa Copiador e Distribuidor do mesmo usuário
 function limKey(c) { return `${c.userId}:${c.kind || 'copiador'}`; }
 
+const MEDIA_MAX_B64 = 2 * 1024 * 1024; // ~1,5MB: acima disso envia na hora
+
+// Contagem diária vinda do banco (sobrevive a reinício do worker)
+async function enviadosHoje(c) {
+  if (!pool) return (sentDays.get(limKey(c)) || { count: 0 }).count;
+  try {
+    const { rows } = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM "DispatchLog" WHERE "userId" = $1 AND COALESCE(kind, $3) = $2 AND "sentAt" >= CURRENT_DATE',
+      [c.userId, c.kind || 'copiador', 'copiador']
+    );
+    return rows[0] ? rows[0].n : 0;
+  } catch {
+    return (sentDays.get(limKey(c)) || { count: 0 }).count;
+  }
+}
+
 // Aplica os limites de frequência e quantidade diária configurados pelo usuário
-function passaLimites(c) {
-  const k = limKey(c);
+async function passaLimites(c) {
   if (c.maxPerDay > 0) {
-    const today = new Date().toISOString().slice(0, 10);
-    const reg = sentDays.get(k);
-    if (reg && reg.day === today && reg.count >= c.maxPerDay) return false;
+    const n = await enviadosHoje(c);
+    if (n >= c.maxPerDay) return false;
   }
   if (c.minInterval > 0) {
-    const last = sentAtByUser.get(k) || 0;
+    const last = sentAtByUser.get(limKey(c)) || 0;
     if (Date.now() - last < c.minInterval * 60000) return false;
   }
   return true;
 }
 
 function marcarEnvio(c) {
-  const k = limKey(c);
-  sentAtByUser.set(k, Date.now());
+  sentAtByUser.set(limKey(c), Date.now());
   const today = new Date().toISOString().slice(0, 10);
-  const reg = sentDays.get(k);
-  sentDays.set(k, reg && reg.day === today ? { day: today, count: reg.count + 1 } : { day: today, count: 1 });
+  const reg = sentDays.get(limKey(c));
+  sentDays.set(limKey(c), reg && reg.day === today ? { day: today, count: reg.count + 1 } : { day: today, count: 1 });
+}
+
+// Enfileira em vez de descartar. Mídia grande demais vai na hora (não cabe na fila).
+async function enfileirar(c, targetJid, text, mediaBuf, mediaType) {
+  if (!pool) { log.warn('sem banco: oferta descartada (fila indisponível)'); return false; }
+  const useMedia = mediaBuf && mediaBuf.length < MEDIA_MAX_B64;
+  const media = useMedia ? mediaBuf.toString('base64') : null;
+  const fp = crypto.createHash('sha1').update(`${c.kind}|${text}`).digest('hex').slice(0, 16);
+  try {
+    await pool.query(
+      'INSERT INTO "QueuedOffer" (id, "userId", kind, "targetJid", text, "mediaType", media, fp) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7) ON CONFLICT ("userId", kind, fp, "targetJid") DO NOTHING',
+      [c.userId, c.kind || 'copiador', targetJid, text, useMedia ? mediaType : null, media, fp]
+    );
+    log.info({ kind: c.kind, targetJid, fila: true }, 'oferta enfileirada (limite de frequência)');
+    return true;
+  } catch (e) {
+    log.warn({ e: String(e).slice(0, 150) }, 'falha ao enfileirar');
+    return false;
+  }
+}
+
+// Envia para um destino: se a mídia for grande demais, ignora a fila e vai agora
+async function enviarOuEnfileirar(c, targetJid, text, mediaBuf, mediaType) {
+  const grande = mediaBuf && mediaBuf.length >= MEDIA_MAX_B64;
+  if (grande) {
+    try {
+      await sendComMidia(targetJid, text, mediaBuf, mediaType);
+      marcarEnvio(c);
+      return true;
+    } catch (e) {
+      log.warn({ e: String(e).slice(0, 200) }, 'envio imediato falhou');
+      return false;
+    }
+  }
+  if (await passaLimites(c)) {
+    try {
+      await sendComMidia(targetJid, text, mediaBuf, mediaType);
+      marcarEnvio(c);
+      return true;
+    } catch (e) {
+      log.warn({ e: String(e).slice(0, 200) }, 'envio falhou');
+      return false;
+    }
+  }
+  return enfileirar(c, targetJid, text, mediaBuf, mediaType);
+}
+
+async function sendComMidia(targetJid, text, mediaBuf, mediaType) {
+  const caption = text.length > 1000 ? text.slice(0, 1000) : text;
+  const rest = text.length > 1000 ? text.slice(1000) : '';
+  if (mediaBuf && mediaType === 'image') await sock.sendMessage(targetJid, { image: mediaBuf, caption });
+  else if (mediaBuf && mediaType === 'video') await sock.sendMessage(targetJid, { video: mediaBuf, caption });
+  else await sock.sendMessage(targetJid, { text });
+  if (rest && mediaBuf) await sock.sendMessage(targetJid, { text: rest });
+  await new Promise((r) => setTimeout(r, 1500));
 }
 
 async function handleCopiador(msg) {
@@ -384,27 +452,58 @@ async function handleCopiador(msg) {
   }
   for (const c of copiadores) {
     if (c.source !== remote || !c.targets.length) continue;
-    // Limites de frequência/quantidade definidos pelo usuário
-    if (!passaLimites(c)) continue;
     const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons);
     if (!converted) continue;
-    const caption = out.length > 1000 ? out.slice(0, 1000) : out;
-    const rest = out.length > 1000 ? out.slice(1000) : '';
-    let enviou = false;
     for (const t of c.targets) {
-      try {
-        if (media && hasImage) await sock.sendMessage(t, { image: media, caption });
-        else if (media && hasVideo) await sock.sendMessage(t, { video: media, caption });
-        else await sock.sendMessage(t, { text: out });
-        if (rest && media) await sock.sendMessage(t, { text: rest });
-        await new Promise((r) => setTimeout(r, 1500));
-        enviou = true;
-        if (pool) await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status) VALUES (gen_random_uuid(), $1, $2, $3, $4)', [c.userId, t, out, 'sent']).catch(() => {});
-      } catch (e) {
-        log.warn({ e: String(e).slice(0, 200) }, 'copiador envio falhou');
-      }
+      await enviarOuEnfileirar(c, t, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
     }
-    if (enviou) marcarEnvio(c);
+  }
+}
+
+// Drena a fila respeitando os mesmos limites (nada se perde)
+async function tickQueue() {
+  if (!pool || !connected) return;
+  let rows = [];
+  try {
+    const r = await pool.query(
+      'SELECT id, "userId", kind, "targetJid", text, "mediaType", media FROM "QueuedOffer" WHERE status = $1 ORDER BY "createdAt" LIMIT 20',
+      ['pending']
+    );
+    rows = r.rows;
+  } catch (e) {
+    log.warn({ e: String(e) }, 'poll fila falhou');
+    return;
+  }
+  for (const item of rows) {
+    const cfg = item.kind === 'distribuidor'
+      ? distribuidores.find((d) => d.userId === item.userId)
+      : copiadores.find((c) => c.userId === item.userId);
+    if (!cfg) {
+      await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = $3', ['canceled', 'origem nao encontrada', item.id]).catch(() => {});
+      continue;
+    }
+    // Destino removido da configuração: cancela em vez de mandar para lugar errado
+    if (!cfg.targets.includes(item.targetJid)) {
+      await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = $3', ['canceled', 'destino removido', item.id]).catch(() => {});
+      continue;
+    }
+    if (!(await passaLimites(cfg))) break; // espera a próxima janela
+    try {
+      const mediaBuf = item.media ? Buffer.from(item.media, 'base64') : null;
+      await sendComMidia(item.targetJid, item.text, mediaBuf, item.mediaType);
+      marcarEnvio(cfg);
+      await pool.query('UPDATE "QueuedOffer" SET status = $1, "sentAt" = NOW() WHERE id = $2', ['sent', item.id]).catch(() => {});
+      await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [item.userId, item.targetJid, item.text, 'sent', item.kind]).catch(() => {});
+      log.info({ kind: item.kind, fila: 'enviada' }, 'fila drenada');
+    } catch (e) {
+      const err = String(e).slice(0, 300);
+      const tent = await pool.query('SELECT COUNT(*)::int AS n FROM "QueuedOffer" WHERE id = $1 AND status = $2', [item.id, 'pending']).catch(() => ({ rows: [{ n: 0 }] }));
+      if (tent.rows[0] && tent.rows[0].n > 0 && !/not found|no matching session|logged out/i.test(err)) {
+        await pool.query('UPDATE "QueuedOffer" SET error = $1 WHERE id = $2', [err, item.id]).catch(() => {});
+        break; // não martela: tenta de novo no próximo ciclo
+      }
+      await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = $3', ['failed', err, item.id]).catch(() => {});
+    }
   }
 }
 
@@ -423,7 +522,6 @@ async function handleDistribuidor(msg) {
     const text = extractText(msg);
     if (!text || !text.trim()) continue;
     if (d.requireLink && !/https?:\/\//.test(text)) continue;
-    if (!passaLimites(d)) continue;
     const targets = [...new Set(d.targets)].filter((t) => t !== d.hub);
     if (!targets.length) continue;
     let out = text;
@@ -440,25 +538,8 @@ async function handleDistribuidor(msg) {
       try { media = await downloadMediaMessage(msg, 'buffer', {}); }
       catch (e) { log.warn({ e: String(e).slice(0, 120) }, 'distribuidor midia falhou, enviando so texto'); }
     }
-    const caption = out.length > 1000 ? out.slice(0, 1000) : out;
-    const rest = out.length > 1000 ? out.slice(1000) : '';
-    let enviou = false;
     for (const t of targets) {
-      try {
-        if (media && hasImage) await sock.sendMessage(t, { image: media, caption });
-        else if (media && hasVideo) await sock.sendMessage(t, { video: media, caption });
-        else await sock.sendMessage(t, { text: out });
-        if (rest && media) await sock.sendMessage(t, { text: rest });
-        await new Promise((r) => setTimeout(r, 1500));
-        enviou = true;
-        if (pool) await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status) VALUES (gen_random_uuid(), $1, $2, $3, $4)', [d.userId, t, out, 'sent']).catch(() => {});
-      } catch (e) {
-        log.warn({ e: String(e).slice(0, 200) }, 'distribuidor envio falhou');
-      }
-    }
-    if (enviou) {
-      marcarEnvio(d);
-      log.info({ hub: d.hub, targets: targets.length }, 'distribuidor repassou');
+      await enviarOuEnfileirar(d, t, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
     }
   }
 }
@@ -471,6 +552,16 @@ function checkAuth(req) {  if (!TOKEN) return true;
 function sendJson(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(obj));
+}
+
+async function filaPendente() {
+  if (!pool) return 0;
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM "QueuedOffer" WHERE status = $1', ['pending']);
+    return rows[0] ? rows[0].n : 0;
+  } catch {
+    return 0;
+  }
 }
 
 async function connect() {
@@ -593,10 +684,10 @@ async function tick() {
     try {
       await sendText(r.groupJid, r.message);
       await pool.query('UPDATE "ScheduledPost" SET status = $1 WHERE id = $2', ['sent', r.id]);
-      await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status) VALUES (gen_random_uuid(), $1, $2, $3, $4)', [r.userId, r.groupJid, r.message, 'sent']);
+      await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [r.userId, r.groupJid, r.message, 'sent', 'agendado']);
     } catch (e) {
       await pool.query('UPDATE "ScheduledPost" SET status = $1, error = $2 WHERE id = $3', ['failed', String(e).slice(0, 500), r.id]).catch(() => {});
-      await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, error) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [r.userId, r.groupJid, r.message, 'failed', String(e).slice(0, 500)]).catch(() => {});
+      await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind, error) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)', [r.userId, r.groupJid, r.message, 'failed', 'agendado', String(e).slice(0, 500)]).catch(() => {});
     }
   }
 }
@@ -671,7 +762,7 @@ async function tickRadar() {
           try {
             await sock.sendMessage(t, { text });
             await new Promise((rr) => setTimeout(rr, 1500));
-            await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status) VALUES (gen_random_uuid(), $1, $2, $3, $4)', [radar.userId, t, text, 'sent']).catch(() => {});
+            await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [radar.userId, t, text, 'sent', 'radar']).catch(() => {});
           } catch (e) {
             log.warn({ e: String(e).slice(0, 200) }, 'radar envio falhou');
           }
@@ -699,7 +790,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/health') return sendJson(res, 200, { ok: true, connected });
   if (!checkAuth(req)) return sendJson(res, 401, { error: 'unauthorized' });
   if (url.pathname === '/status' && req.method === 'GET') {
-    return sendJson(res, 200, { connected, phone, qrUpdatedAt, lastError, copiadores: copiadores.length });
+    return sendJson(res, 200, { connected, phone, qrUpdatedAt, lastError, copiadores: copiadores.length, distribuidores: distribuidores.length, fila: await filaPendente() });
   }
   if (url.pathname === '/qr' && req.method === 'GET') {
     return sendJson(res, 200, { connected, qr: qrDataUrl, updatedAt: qrUpdatedAt });
@@ -748,6 +839,7 @@ server.listen(PORT, () => log.info({ PORT }, 'worker http no ar'));
 connect().catch((e) => log.error(String(e)));
 loadCopiadores().catch(() => {});
 setInterval(tick, 15000);
+setInterval(() => tickQueue().catch((e) => log.warn(String(e).slice(0, 150))), 10000);
 setInterval(loadCopiadores, 60000);
 setInterval(() => tickRadar().catch((e) => log.warn(String(e).slice(0, 150))), 5 * 60 * 1000);
 setTimeout(() => tickRadar().catch(() => {}), 60000);
