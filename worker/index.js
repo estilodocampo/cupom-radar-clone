@@ -288,7 +288,7 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
 async function loadCopiadores() {
   if (!pool) return;
   try {
-    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', ['copiador', 'shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'lista_envio', 'shopee_api', 'boasvindas']);
+    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)', ['copiador', 'distribuidor', 'shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'lista_envio', 'shopee_api', 'boasvindas']);
     const byUser = {};
     for (const r of rows) {
       byUser[r.userId] = byUser[r.userId] || { affIds: {} };
@@ -302,10 +302,7 @@ async function loadCopiadores() {
       }
       else if (r.provider && r.config && r.config.affiliateId) byUser[r.userId].affIds[r.provider] = r.config.affiliateId;
     }
-    copiadores = Object.entries(byUser)
-      .filter(([, v]) => v.copiador && v.copiador.source)
-      .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], keepCoupons: !!v.copiador.keepCoupons, minInterval: Number(v.copiador.minInterval) || 0, maxPerDay: Number(v.copiador.maxPerDay) || 0, affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null }));
-    if (copiadores.length) log.info({ n: copiadores.length }, 'copiadores ativos');
+    // Distribuidor primeiro: o Copiador entrega no hub definido lá
     distribuidores = Object.entries(byUser)
       .filter(([, v]) => v.distribuidor && v.distribuidor.hub && (v.distribuidor.targets || []).length)
       .map(([userId, v]) => {
@@ -320,6 +317,20 @@ async function loadCopiadores() {
         };
       });
     if (distribuidores.length) log.info({ n: distribuidores.length }, 'distribuidores ativos');
+    const hubPorUser = {};
+    for (const d of distribuidores) hubPorUser[d.userId] = d.hub;
+    copiadores = Object.entries(byUser)
+      .filter(([, v]) => v.copiador && v.copiador.source)
+      .map(([userId, v]) => ({
+        userId,
+        source: v.copiador.source,
+        // Destino = seu hub (do Distribuidor); sem Distribuidor, usa os destinos salvos
+        targets: hubPorUser[userId] ? [hubPorUser[userId]] : (v.copiador.targets || []),
+        keepCoupons: !!v.copiador.keepCoupons,
+        minInterval: Number(v.copiador.minInterval) || 0, maxPerDay: Number(v.copiador.maxPerDay) || 0,
+        affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null,
+      }));
+    if (copiadores.length) log.info({ n: copiadores.length }, 'copiadores ativos');
     boasvindasCfgs = Object.entries(byUser)
       .filter(([, v]) => v.boasvindas && (v.boasvindas.targets || []).length && v.boasvindas.text)
       .map(([userId, v]) => ({ userId, targets: v.boasvindas.targets || [], text: String(v.boasvindas.text).slice(0, 500) }));
