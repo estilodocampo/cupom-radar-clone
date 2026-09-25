@@ -14,6 +14,7 @@ model User {
   emailVerified DateTime?
   image         String?
   affiliateId   String    @default("SEU_ID")
+  passwordHash  String?
   accounts      Account[]
   sessions      Session[]
   subscription  Subscription?

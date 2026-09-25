@@ -2,20 +2,29 @@ import type { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
+import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
 
 const providers: NextAuthOptions['providers'] = [
   CredentialsProvider({
-    name: 'Email demo',
+    name: 'Email',
     credentials: {
       email: { label: 'Email', type: 'email', placeholder: 'voce@email.com' },
+      password: { label: 'Senha', type: 'password' },
     },
     async authorize(credentials) {
       const email = credentials?.email?.toLowerCase().trim();
+      const password = credentials?.password || '';
       if (!email || !email.includes('@')) return null;
       let user = await prisma.user.findUnique({ where: { email } }).catch(() => null);
       if (!user) {
-        user = await prisma.user.create({ data: { email } }).catch(() => null);
+        // Primeiro acesso: cria conta (define senha se informada)
+        const data: { email: string; passwordHash?: string } = { email };
+        if (password.length >= 6) data.passwordHash = await bcrypt.hash(password, 10);
+        user = await prisma.user.create({ data }).catch(() => null);
+      } else if (user.passwordHash) {
+        // Conta com senha: exige conferência
+        if (!password || !(await bcrypt.compare(password, user.passwordHash).catch(() => false))) return null;
       }
       if (!user) return null;
       return { id: user.id, email: user.email, name: user.name };

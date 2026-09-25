@@ -44,8 +44,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session } = useSession();
   const path = usePathname();
   const [open, setOpen] = useState<Record<string, boolean>>({ Postagens: true, Configurações: true });
+  const [light, setLight] = useState(false);
   const name = session?.user?.name || session?.user?.email?.split('@')[0] || 'Usuário';
   const active = (href: string) => (href === '/dashboard' ? path === href : path.startsWith(href));
+
+  function toggleTheme() {
+    const next = !light;
+    setLight(next);
+    document.body.classList.toggle('light', next);
+    try { localStorage.setItem('cr_theme', next ? 'light' : 'dark'); } catch { /* ignore */ }
+  }
+
+  React.useEffect(() => {
+    try {
+      if (localStorage.getItem('cr_theme') === 'light') { setLight(true); document.body.classList.add('light'); }
+    } catch { /* ignore */ }
+  }, []);
 
   return (
     <div className="shell">
@@ -73,8 +87,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
         <div style={{ marginTop: 'auto', paddingTop: 12, display: 'grid', gap: 8 }}>
           <a className="btn btn-primary btn-sm" style={{ textAlign: 'center' }} href="https://wa.me/5548996911387" target="_blank" rel="noreferrer">💬 Falar com Suporte</a>
+          <a className="nav-item" href="#" onClick={(e) => { e.preventDefault(); alert('App mobile em breve!'); }}>📲 Baixar App</a>
+          <button className="nav-item" style={{ width: '100%', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left' }} onClick={toggleTheme}>{light ? '🌙 Modo escuro' : '☀️ Modo claro'}</button>
           {session?.user ? (
-            <button className="btn btn-ghost btn-sm" style={{ width: '100%' }} onClick={() => signOut({ callbackUrl: '/' })}>Sair</button>
+            <button className="nav-item" style={{ width: '100%', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left' }} onClick={() => signOut({ callbackUrl: '/' })}>🚪 Sair</button>
           ) : (
             <a className="btn btn-ghost btn-sm" style={{ width: '100%', textAlign: 'center' }} href="/login">Entrar</a>
           )}
