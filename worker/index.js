@@ -532,7 +532,7 @@ async function handleCopiador(msg) {
     if (c.source !== remote || !c.targets.length) continue;
     const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons);
     if (!converted) continue;
-    await enviarOuEnfileirarLote(c, c.targets, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
+    await enviarOuEnfileirarLote(c, c.targets, comMarca(out), media, hasImage ? 'image' : hasVideo ? 'video' : null);
   }
 }
 
@@ -601,6 +601,16 @@ async function tickQueue() {
   }
 }
 
+// Marca d'água invisível: identifica mensagens postadas pelo próprio sistema.
+// Quando o WhatsApp reemite (eco) o que o bot enviou, a marca impede o reenvio.
+const MARCA = '⁣'; // U+2063 INVISIBLE SEPARATOR
+function comMarca(text) {
+  return `${text}\n${MARCA}`;
+}
+function temMarca(text) {
+  return typeof text === 'string' && text.includes(MARCA);
+}
+
 // Distribuidor: o que você posta no SEU grupo é repassado para os demais.
 // Anti-loop: nunca reenvia a partir de um grupo que já é destino, e nunca
 // manda a mensagem de volta para o próprio hub.
@@ -613,9 +623,13 @@ async function handleDistribuidor(msg) {
   for (const d of distribuidores) {
     if (d.pausado) continue; // pausa de emergência
     if (d.hub !== remote) continue;
-    if (d.onlyMine && !msg.key.fromMe) continue;
     const text = extractText(msg);
     if (!text || !text.trim()) continue;
+    // Eco do próprio bot: mensagens enviadas pelo sistema voltam via upsert.
+    // O Copiador marca as suas; qualquer outra fromMe é reemissão e deve ser ignorada.
+    // Com onlyMine ligado, só passa fromMe com marca (1x por oferta).
+    if (msg.key.fromMe && !temMarca(text)) continue;
+    if (d.onlyMine && !(msg.key.fromMe || temMarca(text))) continue;
     if (d.requireLink && !/https?:\/\//.test(text)) continue;
     const targets = [...new Set(d.targets)].filter((t) => t !== d.hub);
     if (!targets.length) continue;
@@ -626,6 +640,7 @@ async function handleDistribuidor(msg) {
     }
     if (d.prefix) out = `${d.prefix}\n\n${out}`;
     if (d.suffix) out = `${out}\n\n${d.suffix}`;
+    if (!temMarca(out)) out = comMarca(out); // marca o que o sistema posta (eco futuro é ignorado)
     const hasImage = !!msg.message?.imageMessage;
     const hasVideo = !!msg.message?.videoMessage;
     let media = null;
