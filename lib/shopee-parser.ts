@@ -47,20 +47,75 @@ export function extractShortId(url: string): string {
   }
 }
 
-// Converte link original para link de afiliado (placeholder - ligar API real depois)
+// Converte link original para link de afiliado preservando os parâmetros
+// originais e trocando SÓ o rastreio (remove o da origem).
+function mergeTracking(originalUrl: string, params: Record<string, string>): string {
+  try {
+    const u = new URL(originalUrl);
+    for (const k of Object.keys(params)) u.searchParams.delete(k);
+    for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+    return u.toString();
+  } catch {
+    const base = originalUrl.split('?')[0].split('#')[0];
+    const qs = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+    return `${base}?${qs}`;
+  }
+}
+
 export function toAffiliateLink(originalUrl: string, affiliateId: string, store: Store): string {
-  const base = originalUrl.split('?')[0];
-  if (store === 'shopee') return `${base}?af_id=${affiliateId}&sub_id=cupomradar`;
-  if (store === 'amazon') return `${base}?tag=${affiliateId}`;
-  return `${base}?af=${affiliateId}`;
+  if (store === 'shopee') return mergeTracking(originalUrl, { af_id: affiliateId, sub_id: 'cupomradar' });
+  if (store === 'amazon') return mergeTracking(originalUrl, { tag: affiliateId });
+  return mergeTracking(originalUrl, { af: affiliateId });
 }
 
 // Mercado Livre: rastreio via matt_tool + matt_word (mesmo do Gerador de links).
-// Remove parâmetros inúteis (ref, forceInApp...) para o link ficar curto.
 export function toMlAffiliateLink(originalUrl: string, tag: string, mattTool?: string): string {
-  const base = originalUrl.split('?')[0].split('#')[0];
-  const tool = mattTool || 'afiliados';
-  return `${base}?matt_tool=${encodeURIComponent(tool)}&matt_word=${encodeURIComponent(tag)}`;
+  return mergeTracking(originalUrl, { matt_tool: mattTool || 'afiliados', matt_word: tag });
+}
+
+const TITLE_STOP = new Set(['com', 'para', 'por', 'uma', 'dos', 'das', 'que', 'nos', 'nas', 'sem', 'the', 'and', 'for', 'link', 'cupom', 'oferta', 'estoque', 'limitado', 'frete', 'gratis', 'imperdivel']);
+
+function normWords(s: string): string[] {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !TITLE_STOP.has(w));
+}
+
+// Vitrine ML (/social/...) -> URL do anúncio real, casando o título.
+// Só troca com confiança (score >= 0.4); senão devolve null.
+export async function resolveMlShowcase(showcaseUrl: string, hints: string[], timeoutMs = 10000): Promise<string | null> {
+  try {
+    if (!/\/social\//.test(showcaseUrl) || !hints.length) return null;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const r = await fetch(showcaseUrl.split('?')[0], {
+      signal: ctrl.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+      },
+    });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const html = await r.text();
+    if (!html || html.length > 2500000) return null;
+    const urls = [...new Set(html.match(/https?:\/\/produto\.mercadolivre\.com\.br\/MLB-[0-9]+[^"'\\\s]*/g) || [])]
+      .map((u) => u.split('?')[0].split('#')[0]);
+    if (!urls.length) return null;
+    let best: string | null = null, bestScore = 0;
+    for (const u of urls) {
+      const sw = normWords((u.split('/').pop() || '').replace(/-/g, ' '));
+      if (!sw.length) continue;
+      for (const h of hints) {
+        const hw = normWords(h);
+        if (!hw.length) continue;
+        const score = hw.filter((w) => sw.includes(w)).length / hw.length;
+        if (score > bestScore) { bestScore = score; best = u; }
+      }
+    }
+    return bestScore >= 0.4 ? best : null;
+  } catch {
+    return null;
+  }
 }
 
 const TEMPLATES: Record<string, (p: { title: string; priceFrom?: string; priceTo: string; link: string; coupon?: string }) => string> = {

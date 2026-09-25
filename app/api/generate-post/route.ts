@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { detectStore, expandUrl, toAffiliateLink, toMlAffiliateLink, buildPost } from '../../../lib/shopee-parser';
+import { detectStore, expandUrl, toAffiliateLink, toMlAffiliateLink, buildPost, resolveMlShowcase } from '../../../lib/shopee-parser';
 import { authOptions } from '../../../lib/auth';
 import { prisma } from '../../../lib/prisma';
 import { checkPostLimit, incrementPostUsage } from '../../../lib/subscription';
@@ -68,10 +68,15 @@ export async function POST(req: NextRequest) {
       }
     }
   }
+  // Se colaram vitrine (/social/), tenta resolver para a página do anúncio
+  let mlBase = url;
+  if (store === 'mercadolivre' && /\/social\//.test(url)) {
+    mlBase = (await resolveMlShowcase(url, [title]).catch(() => null)) || url;
+  }
   const affLink0 =
     short ||
     (store === 'mercadolivre' && affId !== 'SEU_ID'
-      ? toMlAffiliateLink(url, affId, mlMattTool)
+      ? toMlAffiliateLink(mlBase, affId, mlMattTool)
       : toAffiliateLink(url, affId, store));
   const { shortenUrl } = await import('../../../lib/shorten');
   const affLink = await shortenUrl(affLink0, userId);

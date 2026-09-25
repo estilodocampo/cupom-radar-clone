@@ -12,6 +12,7 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  downloadMediaMessage,
 } = require('@whiskeysockets/baileys');
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -68,15 +69,80 @@ async function expandUrl(url, timeoutMs = 8000) {
 }
 
 function toAffiliateLink(originalUrl, affiliateId, store) {
-  const base = originalUrl.split('?')[0];
-  if (store === 'shopee') return `${base}?af_id=${affiliateId}&sub_id=cupomradar`;
-  if (store === 'amazon') return `${base}?tag=${affiliateId}`;
-  return `${base}?af=${affiliateId}`;
+  if (store === 'shopee') return mergeTracking(originalUrl, { af_id: affiliateId, sub_id: 'cupomradar' });
+  if (store === 'amazon') return mergeTracking(originalUrl, { tag: affiliateId });
+  return mergeTracking(originalUrl, { af: affiliateId });
 }
 
 function toMlAffiliateLink(originalUrl, tag, mattTool) {
-  const base = originalUrl.split('?')[0].split('#')[0];
-  return `${base}?matt_tool=${encodeURIComponent(mattTool || 'afiliados')}&matt_word=${encodeURIComponent(tag)}`;
+  return mergeTracking(originalUrl, { matt_tool: mattTool || 'afiliados', matt_word: tag });
+}
+
+// Preserva os parâmetros originais e troca SÓ o rastreio (remove o da origem).
+// Evita mutilar o destino (ex.: perder contexto da página do anúncio).
+function mergeTracking(originalUrl, params) {
+  try {
+    const u = new URL(originalUrl);
+    for (const k of Object.keys(params)) u.searchParams.delete(k);
+    for (const [k, v] of Object.entries(params)) u.searchParams.set(k, String(v));
+    return u.toString();
+  } catch {
+    const base = originalUrl.split('?')[0].split('#')[0];
+    const qs = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
+    return `${base}?${qs}`;
+  }
+}
+
+const BROWSER_UA2 = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+const TITLE_STOP = new Set(['com', 'para', 'por', 'uma', 'dos', 'das', 'que', 'nos', 'nas', 'sem', 'the', 'and', 'for', 'link', 'cupom', 'oferta', 'estoque', 'limitado', 'frete', 'gratis', 'imperdivel']);
+
+function normWords(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !TITLE_STOP.has(w));
+}
+
+// Linhas candidatas a título do produto dentro do texto da oferta
+function titleHints(text) {
+  return (text || '').split('\n')
+    .map((l) => l.replace(/^[^a-zA-Z0-9\u00C0-\u024F]+/, '').trim())
+    .filter((l) => l.length >= 12 && !/https?:\/\//.test(l) && !/^(por|cupom|link|de:|r\$|preço|preco|estoque)/i.test(l))
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 3);
+}
+
+// Vitrine ML (/social/...) -> URL do anúncio real, casando o título da mensagem.
+// Só troca com confiança (score >= 0.4); senão devolve null e mantém a vitrine com rastreio.
+async function resolveMlShowcase(showcaseUrl, hints, timeoutMs = 10000) {
+  try {
+    if (!/\/social\//.test(showcaseUrl) || !hints.length) return null;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const r = await fetch(showcaseUrl.split('?')[0], {
+      signal: ctrl.signal,
+      headers: { 'User-Agent': BROWSER_UA2, 'Accept-Language': 'pt-BR,pt;q=0.9' },
+    });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const html = await r.text();
+    if (!html || html.length > 2500000) return null;
+    const urls = [...new Set(html.match(/https?:\/\/produto\.mercadolivre\.com\.br\/MLB-[0-9]+[^"'\\\s]*/g) || [])]
+      .map((u) => u.split('?')[0].split('#')[0]);
+    if (!urls.length) return null;
+    let best = null, bestScore = 0;
+    for (const u of urls) {
+      const sw = normWords((u.split('/').pop() || '').replace(/-/g, ' '));
+      if (!sw.length) continue;
+      for (const h of hints) {
+        const hw = normWords(h);
+        if (!hw.length) continue;
+        const score = hw.filter((w) => sw.includes(w)).length / hw.length;
+        if (score > bestScore) { bestScore = score; best = u; }
+      }
+    }
+    return bestScore >= 0.4 ? best : null;
+  } catch {
+    return null;
+  }
 }
 
 const crypto = require('crypto');
@@ -144,7 +210,11 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId) {
         final = await shopeeShortLink(url.split('?')[0], ['cupomradar'], shopeeCreds);
         converted++;
       } else if (store === 'mercadolivre' && affIds[store]) {
-        final = toMlAffiliateLink(url, affIds[store], mlMattTool);
+        // Se a origem postou vitrine (/social/), tenta resolver para a página do anúncio
+        const resolved = await resolveMlShowcase(url, titleHints(text)).catch(() => null);
+        if (/\/social\//.test(url) && !resolved) log.warn({ url: url.slice(0, 120) }, 'vitrine ML sem produto correspondente; mantendo vitrine com rastreio');
+        if (resolved) log.info('vitrine ML resolvida para a página do anúncio');
+        final = toMlAffiliateLink(resolved || url, affIds[store], mlMattTool);
         converted++;
       } else if (store !== 'unknown' && store !== 'mercadolivre' && affIds[store]) {
         final = toAffiliateLink(url, affIds[store], store);
@@ -187,7 +257,7 @@ async function loadCopiadores() {
 
 function extractText(msg) {
   const m = msg.message || {};
-  return m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || null;
+  return m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || null;
 }
 
 async function handleCopiador(msg) {
@@ -202,13 +272,29 @@ async function handleCopiador(msg) {
   }
   const text = extractText(msg);
   if (!text || !/https?:\/\//.test(text)) return;
+  // Baixa a mídia (se houver) uma vez para reenviar com a legenda convertida
+  const hasImage = !!msg.message?.imageMessage;
+  const hasVideo = !!msg.message?.videoMessage;
+  let media = null;
+  if (hasImage || hasVideo) {
+    try {
+      media = await downloadMediaMessage(msg, 'buffer', {});
+    } catch (e) {
+      log.warn({ e: String(e).slice(0, 120) }, 'copiador midia falhou, enviando só texto');
+    }
+  }
   for (const c of copiadores) {
     if (c.source !== remote || !c.targets.length) continue;
     const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId);
     if (!converted) continue;
+    const caption = out.length > 1000 ? out.slice(0, 1000) : out;
+    const rest = out.length > 1000 ? out.slice(1000) : '';
     for (const t of c.targets) {
       try {
-        await sock.sendMessage(t, { text: out });
+        if (media && hasImage) await sock.sendMessage(t, { image: media, caption });
+        else if (media && hasVideo) await sock.sendMessage(t, { video: media, caption });
+        else await sock.sendMessage(t, { text: out });
+        if (rest && media) await sock.sendMessage(t, { text: rest });
         await new Promise((r) => setTimeout(r, 1500));
         if (pool) await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status) VALUES (gen_random_uuid(), $1, $2, $3, $4)', [c.userId, t, out, 'sent']).catch(() => {});
       } catch (e) {
