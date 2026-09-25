@@ -14,6 +14,13 @@ const INTERVALS = [
 ];
 
 const MAXES = [0, 1, 2, 3, 5, 10, 20];
+const DEDUP = [
+  { v: 0, l: 'Não bloquear' },
+  { v: 6, l: '6 horas' },
+  { v: 24, l: '24 horas' },
+  { v: 72, l: '3 dias' },
+  { v: 168, l: '7 dias' },
+];
 
 export default function Distribuidor() {
   const [hub, setHub] = useState('');
@@ -27,6 +34,7 @@ export default function Distribuidor() {
   const [suffix, setSuffix] = useState('');
   const [minInterval, setMinInterval] = useState(0);
   const [maxPerDay, setMaxPerDay] = useState(0);
+  const [dedupHoras, setDedupHoras] = useState(24);
   const [groups, setGroups] = useState<Group[]>([]);
   const [msg, setMsg] = useState('');
   const [fila, setFila] = useState(0);
@@ -50,6 +58,7 @@ export default function Distribuidor() {
       setSuffix((c.suffix as string) || '');
       setMinInterval(Number(c.minInterval) || 0);
       setMaxPerDay(Number(c.maxPerDay) || 0);
+      setDedupHoras(Number.isFinite(Number(c.dedupHoras)) ? Number(c.dedupHoras) : 24);
       setPicked(saved.filter((t) => gl.some((x) => x.id === t)));
       setExtra(saved.filter((t) => !gl.some((x) => x.id === t)).join('\n'));
     }).catch(() => {});
@@ -75,7 +84,7 @@ export default function Distribuidor() {
     const res = await fetch('/api/integrations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'distribuidor', config: { hub, targets: all, onlyMine, requireLink, convert, stripCoupons, prefix, suffix, minInterval, maxPerDay } }),
+      body: JSON.stringify({ provider: 'distribuidor', config: { hub, targets: all, onlyMine, requireLink, convert, stripCoupons, prefix, suffix, minInterval, maxPerDay, dedupHoras } }),
     });
     const d = await res.json().catch(() => ({}));
     setMsg(res.ok ? '✅ Distribuidor salvo! Tudo que você postar no seu grupo será repassado.' : `❌ ${d.error || 'Falha ao salvar'}`);
@@ -141,6 +150,12 @@ export default function Distribuidor() {
             <label className="lbl">Máx. por dia</label>
             <select className="input" value={maxPerDay} onChange={(e) => setMaxPerDay(Number(e.target.value))}>
               {MAXES.map((n) => <option key={n} value={n}>{n === 0 ? 'Sem limite' : n}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: '1 1 170px' }}>
+            <label className="lbl">Não repetir a mesma oferta</label>
+            <select className="input" value={dedupHoras} onChange={(e) => setDedupHoras(Number(e.target.value))}>
+              {DEDUP.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
             </select>
           </div>
         </div>

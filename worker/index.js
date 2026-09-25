@@ -311,6 +311,7 @@ async function loadCopiadores() {
           userId, kind: 'distribuidor', hub: c.hub, targets: c.targets || [],
           onlyMine: !!c.onlyMine, requireLink: !!c.requireLink, convert: c.convert !== false,
           stripCoupons: c.stripCoupons !== false,
+          dedupHoras: Number.isFinite(Number(c.dedupHoras)) ? Number(c.dedupHoras) : 24,
           prefix: String(c.prefix || '').slice(0, 300), suffix: String(c.suffix || '').slice(0, 300),
           minInterval: Number(c.minInterval) || 0, maxPerDay: Number(c.maxPerDay) || 0,
           affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null,
@@ -327,6 +328,7 @@ async function loadCopiadores() {
         // Destino = seu hub (do Distribuidor); sem Distribuidor, usa os destinos salvos
         targets: hubPorUser[userId] ? [hubPorUser[userId]] : (v.copiador.targets || []),
         keepCoupons: !!v.copiador.keepCoupons,
+        dedupHoras: Number.isFinite(Number(v.copiador.dedupHoras)) ? Number(v.copiador.dedupHoras) : 24,
         minInterval: Number(v.copiador.minInterval) || 0, maxPerDay: Number(v.copiador.maxPerDay) || 0,
         affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null,
       }));
@@ -383,40 +385,79 @@ function marcarEnvio(c) {
   sentDays.set(limKey(c), reg && reg.day === today ? { day: today, count: reg.count + 1 } : { day: today, count: 1 });
 }
 
-// Enfileira em vez de descartar. Mídia grande demais vai na hora (não cabe na fila).
-async function enfileirar(c, targetJid, text, mediaBuf, mediaType) {
-  if (!pool) { log.warn('sem banco: oferta descartada (fila indisponível)'); return false; }
+// Registra a oferta na fila (chave única = usuário+kind+texto+destino).
+// É o que trava repetição: o índice único impede o mesmo texto 2x no mesmo grupo.
+async function registrarOferta(c, targetJid, text, status, mediaBuf, mediaType) {
+  if (!pool) return false;
   const useMedia = mediaBuf && mediaBuf.length < MEDIA_MAX_B64;
   const media = useMedia ? mediaBuf.toString('base64') : null;
-  const fp = crypto.createHash('sha1').update(`${c.kind}|${text}`).digest('hex').slice(0, 16);
+  const fp = ofertaFp(c, text);
   try {
-    await pool.query(
-      'INSERT INTO "QueuedOffer" (id, "userId", kind, "targetJid", text, "mediaType", media, fp) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7) ON CONFLICT ("userId", kind, fp, "targetJid") DO NOTHING',
-      [c.userId, c.kind || 'copiador', targetJid, text, useMedia ? mediaType : null, media, fp]
+    const res = await pool.query(
+      'INSERT INTO "QueuedOffer" (id, "userId", kind, "targetJid", text, "mediaType", media, fp, status) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT ("userId", kind, fp, "targetJid") DO NOTHING',
+      [c.userId, c.kind || 'copiador', targetJid, text, useMedia ? mediaType : null, media, fp, status]
     );
-    log.info({ kind: c.kind, targetJid, fila: true }, 'oferta enfileirada (limite de frequência)');
-    return true;
+    return res.rowCount > 0;
   } catch (e) {
-    log.warn({ e: String(e).slice(0, 150) }, 'falha ao enfileirar');
+    log.warn({ e: String(e).slice(0, 150) }, 'registro de oferta falhou');
     return false;
   }
+}
+
+function ofertaFp(c, text) {
+  return crypto.createHash('sha1').update(`${c.kind || 'copiador'}|${text}`).digest('hex').slice(0, 16);
+}
+
+// O mesmo texto já foi enviado/enfileirado para este destino dentro da janela?
+async function jaProcessou(c, targetJid, text) {
+  if (!pool || !(c.dedupHoras > 0)) return false;
+  const fp = ofertaFp(c, text);
+  try {
+    const { rows } = await pool.query(
+      'SELECT 1 FROM "QueuedOffer" WHERE "userId" = $1 AND kind = $2 AND fp = $3 AND "targetJid" = $4 AND "createdAt" > NOW() - ($5 || \' hours\')::INTERVAL LIMIT 1',
+      [c.userId, c.kind || 'copiador', fp, targetJid, String(c.dedupHoras)]
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+// Enfileira em vez de descartar
+async function enfileirar(c, targetJid, text, mediaBuf, mediaType) {
+  if (!pool) { log.warn('sem banco: oferta descartada (fila indisponível)'); return false; }
+  const ok = await registrarOferta(c, targetJid, text, 'pending', mediaBuf, mediaType);
+  if (ok) log.info({ kind: c.kind, targetJid, fila: true }, 'oferta enfileirada (limite de frequência)');
+  return ok;
 }
 
 // Envia um mesmo texto para VÁRIOS grupos contando 1 única janela de frequência.
 // (Bug anterior: a janela era consumida a cada grupo, deixando o repasse 13x mais lento.)
 async function enviarOuEnfileirarLote(c, targets, text, mediaBuf, mediaType) {
   if (!targets.length) return false;
+  // Trava anti-repetição: nunca manda o mesmo texto 2x no mesmo grupo dentro da janela
+  let elegiveis = targets;
+  if (c.dedupHoras > 0) {
+    elegiveis = [];
+    for (const t of targets) {
+      if (await jaProcessou(c, t, text)) {
+        log.info({ kind: c.kind, to: t }, 'oferta repetida ignorada (anti-duplicata)');
+      } else elegiveis.push(t);
+    }
+  }
+  if (!elegiveis.length) return false;
   const grande = !!(mediaBuf && mediaBuf.length >= MEDIA_MAX_B64);
   // Mídia grande demais não cabe na fila: entra na hora, ignorando o intervalo
   if (!grande && !(await passaLimites(c))) {
-    for (const t of targets) await enfileirar(c, t, text, mediaBuf, mediaType);
+    for (const t of elegiveis) await enfileirar(c, t, text, mediaBuf, mediaType);
     return false;
   }
   let ok = 0;
-  for (const t of targets) {
+  for (const t of elegiveis) {
     try {
       await sendComMidia(t, text, mediaBuf, mediaType);
       ok++;
+      await registrarOferta(c, t, text, 'sent', mediaBuf, mediaType);
     } catch (e) {
       log.warn({ e: String(e).slice(0, 200), to: t }, 'envio falhou');
     }
