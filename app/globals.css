@@ -199,8 +199,9 @@ a.card { text-decoration: none; color: inherit; display: block; }
   }
   body.mob-open .sidebar { transform: translateX(0); }
   body.mob-open { overflow: hidden; }
-  .mob-backdrop { display: block; position: fixed; top: 0; bottom: 0; right: 0; left: 46px; background: rgba(0,0,0,.45); z-index: 65; border: 0; }
-  .main { transform: translateX(46px); transition: transform .22s ease; }
+  /* Sem deslocar o conteúdo: o drawer cobre e o backdrop bloqueia o toque (evita overflow horizontal) */
+  .mob-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 65; border: 0; }
+  body, .shell, .main { overflow-x: hidden; }
   .mob-menu {
     display: flex; align-items: center; justify-content: center; background: none; border: 1px solid var(--border);
     color: var(--text); border-radius: 10px; width: 40px; height: 40px; font-size: 18px; cursor: pointer; flex-shrink: 0;
@@ -220,15 +221,19 @@ a.card { text-decoration: none; color: inherit; display: block; }
   }
   .tabitem .tabico { font-size: 19px; line-height: 1; }
   .tabitem.active { color: var(--green); }
-  .container { padding: 16px 14px 92px; }
+  .container { padding: 16px 14px 116px; }
   .step { flex-direction: column; }
   .step-num { min-width: 0; }
-  .help-fab { bottom: 76px; right: 14px; padding: 11px 16px; font-size: 14px; }
+  /* Botão de ajuda compacto: não cobre o conteúdo */
+  .help-fab { bottom: 78px; right: 12px; padding: 9px 14px; font-size: 13px; max-width: calc(100vw - 24px); }
   .orbit { display: none; }
   .modal { padding: 18px; border-radius: 14px; }
   .qr-box img { width: 190px; }
   .result { padding: 13px; font-size: 13.5px; }
   .input, select.input, textarea.input { font-size: 16px; padding: 11px 12px; } /* evita zoom no iOS */
+  /* Textos longos (JID, badge) não esturam a página */
+  .container, .card, .topbar-app { word-break: break-word; overflow-wrap: anywhere; }
+  .topbar-plan { max-width: 108px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chan-foot button, .chan-foot a { padding: 4px 0; min-height: 34px; }
 }
 
