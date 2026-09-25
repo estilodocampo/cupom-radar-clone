@@ -38,7 +38,10 @@ export async function mlExchangeToken(code: string, verifier: string) {
     }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { message?: string }).message || `ML token ${res.status}`);
+  if (!res.ok) {
+    const d = data as { message?: string; error?: string; error_description?: string };
+    throw new Error(`ML token ${res.status}: ${d.error_description || d.message || d.error || 'sem detalhe'}`);
+  }
   return data as { access_token: string; refresh_token: string; expires_in: number; user_id: number };
 }
 
