@@ -31,7 +31,12 @@ export default function Produtos() {
           <label className="lbl">Preço</label>
           <input className="input" value={priceTo} onChange={(e) => setPriceTo(e.target.value)} />
           <button className="btn btn-primary" style={{ width: '100%' }} onClick={generate}>Gerar postagem</button>
-          {result && <div className="result">{result}</div>}
+          {result && (
+            <>
+              <div className="result">{result}</div>
+              <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(result); alert('Texto copiado!'); }}>📋 Copiar texto</button>
+            </>
+          )}
         </div>
         <Whatsapp />
       </div>
