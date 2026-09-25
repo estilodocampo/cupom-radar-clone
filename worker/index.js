@@ -80,6 +80,7 @@ function toMlAffiliateLink(originalUrl, tag, mattTool) {
 }
 
 const crypto = require('crypto');
+const WEB_URL = (process.env.WEB_URL || 'https://cupom-radar-clone-production.up.railway.app').replace(/\/$/, '');
 
 async function shopeeShortLink(originUrl, subIds, creds) {
   const query = `mutation { generateShortLink(input: { originUrl: ${JSON.stringify(originUrl)}, subIds: ${JSON.stringify(subIds.slice(0, 5))} }) { shortLink } }`;
@@ -97,32 +98,38 @@ async function shopeeShortLink(originUrl, subIds, creds) {
   return data.data.generateShortLink.shortLink;
 }
 
-async function shortenUrl(longUrl, timeoutMs = 8000) {
+async function shortenUrl(longUrl, userId, timeoutMs = 8000) {
   if (longUrl.length <= 60) return longUrl;
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  if (pool && userId) {
+    try {
+      const ex = await pool.query('SELECT code FROM "ShortLink" WHERE "userId" = $1 AND url = $2 LIMIT 1', [userId, longUrl]);
+      if (ex.rows[0]) return `${WEB_URL}/r/${ex.rows[0].code}`;
+    } catch { /* segue */ }
+    for (let i = 0; i < 3; i++) {
+      const code = crypto.randomBytes(4).toString('base64url');
+      try {
+        await pool.query('INSERT INTO "ShortLink" (id, code, url, "userId") VALUES (gen_random_uuid(), $1, $2, $3)', [code, longUrl, userId]);
+        return `${WEB_URL}/r/${code}`;
+      } catch { /* colisão */ }
+    }
+  }
   try {
-    const r1 = await fetch(`https://da.gd/s/?url=${encodeURIComponent(longUrl)}`, { signal: ctrl.signal });
-    const b1 = (await r1.text()).trim();
-    if (r1.ok && /^https?:\/\/da\.gd\/[A-Za-z0-9]+$/.test(b1)) return b1;
-  } catch { /* tenta próximo */ }
-  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
     const r2 = await fetch('https://cleanuri.com/api/v1/shorten', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: longUrl }),
       signal: ctrl.signal,
     });
+    clearTimeout(t);
     const b2 = await r2.json().catch(() => ({}));
     if (r2.ok && b2.result_url && /^https?:\/\//.test(b2.result_url)) return b2.result_url;
   } catch { /* mantém original */ }
-  finally {
-    clearTimeout(t);
-  }
   return longUrl;
 }
 
-async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool) {
+async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId) {
   let converted = 0;
   const urls = [...new Set(text.match(/https?:\/\/[^\s)]+/g) || [])];
   let out = text;
@@ -143,7 +150,7 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool) {
         converted++;
       }
       if (final) {
-        final = await shortenUrl(final);
+        final = await shortenUrl(final, c.userId);
         out = out.split(raw).join(final);
       }
     } catch (e) {
@@ -196,7 +203,7 @@ async function handleCopiador(msg) {
   if (!text || !/https?:\/\//.test(text)) return;
   for (const c of copiadores) {
     if (c.source !== remote || !c.targets.length) continue;
-    const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool);
+    const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId);
     if (!converted) continue;
     for (const t of c.targets) {
       try {

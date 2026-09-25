@@ -133,3 +133,14 @@ model Feedback {
   message   String   @db.Text
   createdAt DateTime @default(now())
 }
+
+model ShortLink {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  url       String   @db.Text
+  userId    String?
+  clicks    Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId, url])
+}

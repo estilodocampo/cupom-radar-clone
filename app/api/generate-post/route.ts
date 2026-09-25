@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       ? toMlAffiliateLink(url, affId, mlMattTool)
       : toAffiliateLink(url, affId, store));
   const { shortenUrl } = await import('../../../lib/shorten');
-  const affLink = await shortenUrl(affLink0);
+  const affLink = await shortenUrl(affLink0, userId);
   let text: string;
   if (template) {
     text = template
