@@ -1,24 +1,55 @@
 import { PLANS } from '../lib/plans';
 
+const STORES = ['Shopee', 'Amazon', 'Mercado Livre', 'SHEIN', 'Magalu'];
+
 export default function Home() {
   return (
-    <main style={{ maxWidth: 900, margin: '0 auto', padding: 32 }}>
-      <h1>O Aplicativo dos Top Afiliados (Clone Fase 1)</h1>
-      <p>Sua divulgação no piloto automático. Base SaaS: landing + planos + gerador Shopee.</p>
-      <div style={{ display: 'flex', gap: 12 }}>
-        <a href="/login" style={{ background: '#22c55e', color: '#000', padding: '10px 20px', borderRadius: 8, textDecoration: 'none' }}>Comece agora</a>
-        <a href="/dashboard" style={{ border: '1px solid #333', padding: '10px 20px', borderRadius: 8, color: '#fff' }}>Dashboard</a>
+    <div className="container">
+      <nav className="nav">
+        <div className="brand"><span className="brand-badge">📡</span> Cupom Radar</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <a className="btn btn-ghost btn-sm" href="/login">Entrar</a>
+          <a className="btn btn-primary btn-sm" href="/login">Começar grátis</a>
+        </div>
+      </nav>
+
+      <header className="hero">
+        <span className="pill">🚀 A automação dos top afiliados</span>
+        <h1>Sua divulgação no <span>piloto automático</span></h1>
+        <p>Cole o link do produto, gere a postagem pronta e dispare nos seus grupos de WhatsApp e Telegram — no horário ideal, mesmo offline.</p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+          <a className="btn btn-primary" href="/login">Começar agora</a>
+          <a className="btn btn-ghost" href="#planos">Ver planos</a>
+        </div>
+        <div className="logos">{STORES.map((s) => <span key={s} className="logo-chip">{s}</span>)}</div>
+        <div className="stats"><span>✅ Grátis para começar</span><span>⚡ Posts em segundos</span><span>🛡️ Garantia de 7 dias</span></div>
+      </header>
+
+      <h2 className="section-title">Tudo que você precisa para vender mais</h2>
+      <p className="section-sub">Do link ao disparo, sem trabalho manual.</p>
+      <div className="grid grid-3">
+        <div className="card"><div className="feat">✨</div><h3>Gerador de postagens</h3><p className="hint">Texto pronto com preço, cupom e seu link de afiliado em segundos.</p></div>
+        <div className="card"><div className="feat">📲</div><h3>Automação WhatsApp</h3><p className="hint">Conecte via QR, escolha os grupos e agende os disparos.</p></div>
+        <div className="card"><div className="feat">⏰</div><h3>Agendamento inteligente</h3><p className="hint">Programe ofertas para os melhores horários e venda dormindo.</p></div>
       </div>
-      <h2 style={{ marginTop: 40 }}>Planos</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 16 }}>
+
+      <h2 className="section-title" id="planos">Um plano para cada momento</h2>
+      <p className="section-sub">Comece grátis e evolua quando precisar.</p>
+      <div className="grid grid-4">
         {PLANS.map((p) => (
-          <div key={p.id} style={{ border: '1px solid #222', borderRadius: 12, padding: 16, background: '#111827' }}>
+          <div key={p.id} className={`card${p.id === 'premium' ? ' plan-pop' : ''}`}>
+            {p.id === 'premium' && <span className="tag">MAIS POPULAR</span>}
             <h3>{p.name}</h3>
-            <p>R$ {p.priceYearly.toFixed(2)}/ano</p>
+            <div className="price">R$ {p.priceYearly.toFixed(2).replace('.', ',')}<small>/ano</small></div>
             <ul>{p.features.map((f) => <li key={f}>{f}</li>)}</ul>
+            <a className={`btn ${p.id === 'gratuito' ? 'btn-ghost' : 'btn-primary'}`} style={{ width: '100%', textAlign: 'center' }} href="/login">
+              {p.id === 'gratuito' ? 'Começar grátis' : `Assinar ${p.name}`}
+            </a>
           </div>
         ))}
       </div>
-    </main>
+
+      <footer className="footer">© 2026 Cupom Radar Clone · Fase 2 · Feito para afiliados brasileiros</footer>
+    </div>
   );
 }

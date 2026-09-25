@@ -36,7 +36,7 @@ export default function Whatsapp() {
   async function sendTest() {
     setMsg('Enviando...');
     const r = await fetch('/api/whatsapp/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, text }) }).then((x) => x.json());
-    setMsg(r.ok ? 'Enviado!' : `Erro: ${r.error}`);
+    setMsg(r.ok ? '✅ Enviado!' : `❌ Erro: ${r.error}`);
     load();
   }
 
@@ -44,33 +44,55 @@ export default function Whatsapp() {
     setMsg('Agendando...');
     const g = groups.find((x) => x.id === to);
     const r = await fetch('/api/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupJid: to, groupName: g?.name, message: text, scheduledAt: when }) }).then((x) => x.json());
-    setMsg(r.ok ? 'Agendado!' : `Erro: ${r.error}`);
+    setMsg(r.ok ? '✅ Agendado!' : `❌ Erro: ${r.error}`);
     load();
   }
 
   return (
-    <section style={{ marginTop: 32, borderTop: '1px solid #222', paddingTop: 24 }}>
-      <h2>WhatsApp (Fase 2)</h2>
-      <p>Status: {status == null ? '...' : status.connected ? `Conectado (${status.phone || ''})` : 'Desconectado — escaneie o QR'}</p>
-      {!status?.connected && qr && <img src={qr} alt="QR WhatsApp" style={{ width: 220, background: '#fff', padding: 8, borderRadius: 8 }} />}
-      <div style={{ marginTop: 8 }}><button onClick={load}>Atualizar</button></div>
-      <h3>Enviar / Agendar</h3>
-      <select value={to} onChange={(e) => setTo(e.target.value)} style={{ width: '100%', padding: 8, marginBottom: 8 }}>
-        <option value="">Selecione o grupo...</option>
-        {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-      </select>
-      <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="Ou JID do grupo" style={{ width: '100%', padding: 8, marginBottom: 8 }} />
-      <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Mensagem (cole o texto gerado acima)" rows={4} style={{ width: '100%', padding: 8, marginBottom: 8 }} />
-      <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} style={{ padding: 8, marginBottom: 8 }} />
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={sendTest}>Enviar agora</button>
-        <button onClick={schedule}>Agendar</button>
+    <div className="grid" style={{ gridTemplateColumns: '1fr', maxWidth: 720 }}>
+      <div className="card">
+        <h3>📲 Conexão WhatsApp</h3>
+        <p>
+          {status == null ? 'Verificando...' : status.connected
+            ? <><span className="badge badge-ok">Conectado</span> <span className="hint">{status.phone || ''}</span></>
+            : <><span className="badge badge-warn">Desconectado</span> <span className="hint">escaneie o QR abaixo</span></>}
+        </p>
+        {!status?.connected && qr && <div className="qr-box"><img src={qr} alt="QR WhatsApp" /></div>}
+        <div style={{ marginTop: 12 }}><button className="btn btn-ghost btn-sm" onClick={load}>Atualizar status</button></div>
       </div>
-      {msg && <p>{msg}</p>}
-      <h3>Agendados</h3>
-      <ul>{sched.map((s) => <li key={s.id}>{new Date(s.scheduledAt).toLocaleString()} — {s.groupName || s.groupJid} — {s.status}</li>)}</ul>
-      <h3>Histórico</h3>
-      <ul>{logs.map((l) => <li key={l.id}>{new Date(l.sentAt).toLocaleString()} — {l.groupJid} — {l.status}{l.error ? ` (${l.error})` : ''}</li>)}</ul>
-    </section>
+
+      <div className="card">
+        <h3>📤 Enviar / agendar oferta</h3>
+        <label className="lbl">Grupo</label>
+        <select className="input" value={to} onChange={(e) => setTo(e.target.value)}>
+          <option value="">Selecione o grupo...</option>
+          {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select>
+        <input className="input" value={to} onChange={(e) => setTo(e.target.value)} placeholder="Ou cole o JID do grupo" />
+        <label className="lbl">Mensagem</label>
+        <textarea className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Cole aqui o texto gerado na aba Gerar oferta" rows={4} />
+        <label className="lbl">Agendar para (opcional p/ envio imediato)</label>
+        <input className="input" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary" onClick={sendTest}>Enviar agora</button>
+          <button className="btn btn-ghost" onClick={schedule}>Agendar</button>
+        </div>
+        {msg && <p>{msg}</p>}
+      </div>
+
+      <div className="card">
+        <h3>⏰ Agendados</h3>
+        {sched.length === 0 ? <p className="hint">Nenhum agendamento.</p> : (
+          <ul className="list">{sched.map((s) => <li key={s.id}><b>{new Date(s.scheduledAt).toLocaleString()}</b> — {s.groupName || s.groupJid} — <span className="badge badge-info">{s.status}</span></li>)}</ul>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>📜 Histórico de disparos</h3>
+        {logs.length === 0 ? <p className="hint">Nenhum disparo ainda.</p> : (
+          <ul className="list">{logs.map((l) => <li key={l.id}><b>{new Date(l.sentAt).toLocaleString()}</b> — {l.groupJid} — <span className={`badge ${l.status === 'sent' ? 'badge-ok' : 'badge-err'}`}>{l.status}</span>{l.error ? ` (${l.error})` : ''}</li>)}</ul>
+        )}
+      </div>
+    </div>
   );
 }

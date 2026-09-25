@@ -1,12 +1,13 @@
 import React from 'react';
 import Providers from './providers';
+import './globals.css';
 
-export const metadata = { title: 'Cupom Radar Clone - Fase 1b', description: 'SaaS afiliados com auth + pagamento' };
+export const metadata = { title: 'Cupom Radar — Automação de Afiliados', description: 'Gere ofertas, conecte o WhatsApp e venda no piloto automático' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body style={{ fontFamily: 'system-ui, sans-serif', margin: 0, background: '#0b0f14', color: '#fff' }}>
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -5,16 +5,22 @@ import { useState } from 'react';
 export default function Login() {
   const [email, setEmail] = useState('');
   return (
-    <main style={{ maxWidth: 420, margin: '60px auto', padding: 24 }}>
-      <h1>Entrar</h1>
-      <p>Acesso com email (demo) ou Google, quando configurado.</p>
-      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" type="email" style={{ width: '100%', padding: 10, marginBottom: 10 }} />
-      <button onClick={() => signIn('credentials', { email, callbackUrl: '/dashboard' })} style={{ width: '100%', padding: 12, background: '#22c55e', border: 0, borderRadius: 8, marginBottom: 10 }}>
-        Entrar com Email
-      </button>
-      <button onClick={() => signIn('google', { callbackUrl: '/dashboard' })} style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #333', background: '#111', color: '#fff' }}>
-        Continuar com Google
-      </button>
-    </main>
+    <div className="container">
+      <div className="auth-wrap">
+        <div className="card auth-card">
+          <div className="brand" style={{ justifyContent: 'center', marginBottom: 8 }}><span className="brand-badge">📡</span> Cupom Radar</div>
+          <h2 style={{ margin: '8px 0' }}>Bem-vindo de volta</h2>
+          <p className="hint">Entre para gerar ofertas e automatizar seus grupos.</p>
+          <label className="lbl" style={{ textAlign: 'left' }}>Email</label>
+          <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" type="email" />
+          <button className="btn btn-primary" style={{ width: '100%', marginBottom: 10 }} onClick={() => signIn('credentials', { email, callbackUrl: '/dashboard' })}>
+            Entrar com Email
+          </button>
+          <button className="btn btn-ghost" style={{ width: '100%' }} onClick={() => signIn('google', { callbackUrl: '/dashboard' })}>
+            Continuar com Google
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
