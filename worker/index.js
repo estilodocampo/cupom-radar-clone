@@ -97,6 +97,21 @@ async function shopeeShortLink(originUrl, subIds, creds) {
   return data.data.generateShortLink.shortLink;
 }
 
+async function shortenUrl(longUrl, timeoutMs = 8000) {
+  if (longUrl.length <= 60) return longUrl;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, { signal: ctrl.signal });
+    clearTimeout(t);
+    const short = (await res.text()).trim();
+    if (res.ok && /^https?:\/\/is\.gd\/[A-Za-z0-9]+$/.test(short)) return short;
+    return longUrl;
+  } catch {
+    return longUrl;
+  }
+}
+
 async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool) {
   let converted = 0;
   const urls = [...new Set(text.match(/https?:\/\/[^\s)]+/g) || [])];
@@ -105,17 +120,21 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool) {
     let url = raw.replace(/[.,!?]+$/, '');
     url = await expandUrl(url).catch(() => url);
     const store = detectStore(url);
+    let final = null;
     try {
       if (store === 'shopee' && shopeeCreds) {
-        const short = await shopeeShortLink(url.split('?')[0], ['cupomradar'], shopeeCreds);
-        out = out.split(raw).join(short);
+        final = await shopeeShortLink(url.split('?')[0], ['cupomradar'], shopeeCreds);
         converted++;
       } else if (store === 'mercadolivre' && affIds[store]) {
-        out = out.split(raw).join(toMlAffiliateLink(url, affIds[store], mlMattTool));
+        final = toMlAffiliateLink(url, affIds[store], mlMattTool);
         converted++;
       } else if (store !== 'unknown' && store !== 'mercadolivre' && affIds[store]) {
-        out = out.split(raw).join(toAffiliateLink(url, affIds[store], store));
+        final = toAffiliateLink(url, affIds[store], store);
         converted++;
+      }
+      if (final) {
+        final = await shortenUrl(final);
+        out = out.split(raw).join(final);
       }
     } catch (e) {
       log.warn({ e: String(e).slice(0, 150) }, 'conversao falhou, mantendo original');

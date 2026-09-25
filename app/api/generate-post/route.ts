@@ -68,11 +68,13 @@ export async function POST(req: NextRequest) {
       }
     }
   }
-  const affLink =
+  const affLink0 =
     short ||
     (store === 'mercadolivre' && affId !== 'SEU_ID'
       ? toMlAffiliateLink(url, affId, mlMattTool)
       : toAffiliateLink(url, affId, store));
+  const { shortenUrl } = await import('../../../lib/shorten');
+  const affLink = await shortenUrl(affLink0);
   let text: string;
   if (template) {
     text = template
