@@ -73,3 +73,34 @@ label.lbl { display: block; font-size: 13px; color: var(--muted); margin: 10px 0
 .logos { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 20px 0 8px; }
 .logo-chip { border: 1px solid var(--border); background: var(--bg2); border-radius: 999px; padding: 8px 18px; font-size: 14px; font-weight: 600; }
 .hint { font-size: 13px; color: var(--muted); }
+/* Sidebar layout (estilo Config Robô) */
+.shell { display: flex; min-height: 100vh; }
+.sidebar { width: 250px; flex-shrink: 0; background: #0b1122; border-right: 1px solid var(--border); padding: 20px 14px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.side-user { display: flex; gap: 10px; align-items: center; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin: 14px 0; }
+.avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, var(--green), #0ea5e9); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: #04120a; }
+.side-user small { display: block; font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+.side-user b { font-size: 14px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600; }
+.nav-item:hover { background: var(--bg2); color: var(--text); }
+.nav-item.active { background: linear-gradient(135deg, var(--green), var(--green2)); color: #04120a; }
+.nav-item .new { margin-left: auto; background: var(--green); color: #04120a; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+.nav-group { font-size: 11px; letter-spacing: 1px; color: var(--muted); padding: 14px 12px 4px; font-weight: 700; }
+.main { flex: 1; min-width: 0; }
+.back { color: var(--muted); text-decoration: none; font-size: 14px; }
+.eyebrow { color: var(--green); font-size: 12px; font-weight: 800; letter-spacing: 2px; margin: 18px 0 4px; }
+.h1 { font-size: clamp(28px, 4vw, 40px); margin: 0 0 6px; }
+.sub { color: var(--muted); margin: 0 0 24px; }
+.step { display: flex; gap: 20px; padding: 24px 0; border-top: 1px solid var(--border); }
+.step-num { color: var(--muted); font-size: 13px; min-width: 120px; }
+.step-num b { display: block; color: var(--text); font-size: 16px; margin-top: 4px; }
+.step-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; flex: 1; }
+.chan { background: linear-gradient(180deg, var(--card2), var(--card)); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.chan-top { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.chan-ico { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.chan h3 { margin: 4px 0; font-size: 18px; }
+.chan p { color: var(--muted); font-size: 13px; margin: 0 0 8px; flex: 1; }
+.chan-foot { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 12px; font-size: 13px; font-weight: 700; }
+.chan-foot a, .chan-foot button { color: var(--text); background: none; border: 0; cursor: pointer; font-weight: 700; font-size: 13px; text-decoration: none; padding: 0; }
+.store-logo { display: inline-block; background: #fff; color: #111; font-weight: 800; font-size: 12px; border-radius: 8px; padding: 5px 12px; }
+.help-fab { position: fixed; right: 20px; bottom: 20px; background: var(--green); color: #04120a; border: 0; border-radius: 999px; padding: 12px 20px; font-weight: 800; cursor: pointer; box-shadow: 0 8px 30px rgba(34,197,94,.4); }
+@media (max-width: 860px) { .sidebar { display: none; } .step { flex-direction: column; } }

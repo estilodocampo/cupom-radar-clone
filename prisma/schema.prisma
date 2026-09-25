@@ -21,6 +21,7 @@ model User {
   whatsapp      WhatsappConnection?
   scheduled     ScheduledPost[]
   dispatches    DispatchLog[]
+  integrations  Integration[]
   createdAt     DateTime  @default(now())
 }
 
@@ -110,4 +111,15 @@ model DispatchLog {
   status    String
   error     String?
   sentAt    DateTime @default(now())
+}
+
+model Integration {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider  String
+  config    Json     @default("{}")
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, provider])
 }
