@@ -472,7 +472,7 @@ async function tickQueue() {
   let rows = [];
   try {
     const r = await pool.query(
-      'SELECT id, "userId", kind, "targetJid", text, "mediaType", media FROM "QueuedOffer" WHERE status = $1 ORDER BY "createdAt" LIMIT 20',
+      'SELECT id, "userId", kind, "targetJid", text, "mediaType", media, fp FROM "QueuedOffer" WHERE status = $1 ORDER BY "createdAt" LIMIT 300',
       ['pending']
     );
     rows = r.rows;
@@ -480,36 +480,53 @@ async function tickQueue() {
     log.warn({ e: String(e) }, 'poll fila falhou');
     return;
   }
-  for (const item of rows) {
-    const cfg = item.kind === 'distribuidor'
-      ? distribuidores.find((d) => d.userId === item.userId)
-      : copiadores.find((c) => c.userId === item.userId);
+  if (!rows.length) return;
+  // Agrupa por mensagem: todos os destinos da MESMA oferta saem numa janela só
+  const groups = new Map();
+  for (const r of rows) {
+    const k = `${r.userId}|${r.kind}|${r.fp}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  }
+  for (const items of groups.values()) {
+    const first = items[0];
+    const cfg = first.kind === 'distribuidor'
+      ? distribuidores.find((d) => d.userId === first.userId)
+      : copiadores.find((c) => c.userId === first.userId);
     if (!cfg) {
-      await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = $3', ['canceled', 'origem nao encontrada', item.id]).catch(() => {});
+      await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = ANY($3::text[])', ['canceled', 'origem nao encontrada', items.map((i) => i.id)]).catch(() => {});
       continue;
     }
     // Destino removido da configuração: cancela em vez de mandar para lugar errado
-    if (!cfg.targets.includes(item.targetJid)) {
-      await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = $3', ['canceled', 'destino removido', item.id]).catch(() => {});
-      continue;
+    const validos = [];
+    for (const i of items) {
+      if (cfg.targets.includes(i.targetJid)) validos.push(i);
+      else await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = $3', ['canceled', 'destino removido', i.id]).catch(() => {});
     }
+    if (!validos.length) continue;
     if (!(await passaLimites(cfg))) break; // espera a próxima janela
-    try {
-      const mediaBuf = item.media ? Buffer.from(item.media, 'base64') : null;
-      await sendComMidia(item.targetJid, item.text, mediaBuf, item.mediaType);
-      marcarEnvio(cfg);
-      await pool.query('UPDATE "QueuedOffer" SET status = $1, "sentAt" = NOW() WHERE id = $2', ['sent', item.id]).catch(() => {});
-      await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [item.userId, item.targetJid, item.text, 'sent', item.kind]).catch(() => {});
-      log.info({ kind: item.kind, fila: 'enviada' }, 'fila drenada');
-    } catch (e) {
-      const err = String(e).slice(0, 300);
-      const tent = await pool.query('SELECT COUNT(*)::int AS n FROM "QueuedOffer" WHERE id = $1 AND status = $2', [item.id, 'pending']).catch(() => ({ rows: [{ n: 0 }] }));
-      if (tent.rows[0] && tent.rows[0].n > 0 && !/not found|no matching session|logged out/i.test(err)) {
-        await pool.query('UPDATE "QueuedOffer" SET error = $1 WHERE id = $2', [err, item.id]).catch(() => {});
-        break; // não martela: tenta de novo no próximo ciclo
+    let ok = 0;
+    for (const i of validos) {
+      try {
+        const mediaBuf = i.media ? Buffer.from(i.media, 'base64') : null;
+        await sendComMidia(i.targetJid, i.text, mediaBuf, i.mediaType);
+        await pool.query('UPDATE "QueuedOffer" SET status = $1, "sentAt" = NOW() WHERE id = $2', ['sent', i.id]).catch(() => {});
+        await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [i.userId, i.targetJid, i.text, 'sent', i.kind]).catch(() => {});
+        ok++;
+      } catch (e) {
+        const err = String(e).slice(0, 300);
+        if (/not found|no matching session|logged out|item-not-found/i.test(err)) {
+          await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = $3', ['failed', err, i.id]).catch(() => {});
+        } else {
+          await pool.query('UPDATE "QueuedOffer" SET error = $1 WHERE id = $2', [err, i.id]).catch(() => {});
+        }
       }
-      await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = $3', ['failed', err, item.id]).catch(() => {});
     }
+    if (ok) {
+      marcarEnvio(cfg);
+      log.info({ kind: first.kind, destinos: ok, oferta: first.fp }, 'fila drenada');
+    }
+    if (ok < validos.length) break; // houve erro: tenta o resto no próximo ciclo
   }
 }
 
