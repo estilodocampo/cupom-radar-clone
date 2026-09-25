@@ -94,7 +94,18 @@ label.lbl { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 
 .step-num { color: var(--muted); font-size: 12px; min-width: 110px; }
 .step-num b { display: block; color: var(--text); font-size: 14px; margin-top: 2px; }
 .step-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; flex: 1; }
-.chan { background: linear-gradient(180deg, var(--card2), var(--card)); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.chan { background: linear-gradient(180deg, var(--card2), var(--card)); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 6px; position: relative; overflow: hidden; }
+.watermark { position: absolute; right: -14px; top: 50%; transform: translateY(-50%); font-size: 110px; opacity: .07; pointer-events: none; }
+.step-cap { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.step-rule { flex: 1; height: 1px; background: var(--border); margin-left: 8px; }
+/* Modal */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+.modal { background: var(--card2); border: 1px solid var(--border); border-radius: 16px; padding: 22px; max-width: 440px; width: 100%; }
+.modal h3 { margin: 0 0 4px; }
+.orbit { position: relative; width: 120px; height: 120px; margin-left: auto; }
+.orbit::before, .orbit::after { content: ''; position: absolute; inset: 0; border: 1px dashed var(--border); border-radius: 50%; }
+.orbit::after { inset: 22px; }
+.orbit span { position: absolute; inset: 38px; background: linear-gradient(135deg, var(--green), #0ea5e9); border-radius: 22px; display: flex; align-items: center; justify-content: center; font-size: 28px; }
 .chan-top { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .chan-ico { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
 .chan h3 { margin: 2px 0; font-size: 16px; }
