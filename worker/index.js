@@ -28,6 +28,91 @@ let phone = null;
 let qrDataUrl = null;
 let qrUpdatedAt = null;
 let lastError = null;
+const bootTime = Date.now();
+const seenIds = new Set();
+let copiadores = []; // [{userId, source, targets, affIds}]
+
+// ---- Conversão de links (espelho de lib/shopee-parser) ----
+function detectStore(url) {
+  const u = url.toLowerCase();
+  if (u.includes('shopee')) return 'shopee';
+  if (u.includes('amazon')) return 'amazon';
+  if (u.includes('mercadolivre') || u.includes('mercadolibre')) return 'mercadolivre';
+  if (u.includes('magalu') || u.includes('magazineluiza')) return 'magalu';
+  if (u.includes('shein')) return 'shein';
+  return 'unknown';
+}
+
+function toAffiliateLink(originalUrl, affiliateId, store) {
+  const base = originalUrl.split('?')[0];
+  if (store === 'shopee') return `${base}?af_id=${affiliateId}&sub_id=cupomradar`;
+  if (store === 'amazon') return `${base}?tag=${affiliateId}`;
+  return `${base}?af=${affiliateId}`;
+}
+
+function convertTextLinks(text, affIds) {
+  let converted = 0;
+  const out = text.replace(/https?:\/\/[^\s)]+/g, (url) => {
+    const store = detectStore(url);
+    const id = affIds[store];
+    if (store === 'unknown' || !id) return url;
+    converted++;
+    return toAffiliateLink(url.replace(/[.,!?]+$/, ''), id, store);
+  });
+  return { out, converted };
+}
+
+async function loadCopiadores() {
+  if (!pool) return;
+  try {
+    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8)', ['copiador', 'shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'lista_envio']);
+    const byUser = {};
+    for (const r of rows) {
+      byUser[r.userId] = byUser[r.userId] || { affIds: {} };
+      if (r.provider === 'copiador') byUser[r.userId].copiador = r.config || {};
+      else if (r.provider && r.config && r.config.affiliateId) byUser[r.userId].affIds[r.provider] = r.config.affiliateId;
+    }
+    copiadores = Object.entries(byUser)
+      .filter(([, v]) => v.copiador && v.copiador.source)
+      .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], affIds: v.affIds }));
+    if (copiadores.length) log.info({ n: copiadores.length }, 'copiadores ativos');
+  } catch (e) {
+    log.warn({ e: String(e) }, 'load copiadores falhou');
+  }
+}
+
+function extractText(msg) {
+  const m = msg.message || {};
+  return m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || null;
+}
+
+async function handleCopiador(msg) {
+  if (!msg.key || msg.key.fromMe) return;
+  const remote = msg.key.remoteJid || '';
+  const ts = Number(msg.messageTimestamp) * 1000;
+  if (!remote.endsWith('@g.us') || ts < bootTime) return;
+  if (msg.key.id && seenIds.has(msg.key.id)) return;
+  if (msg.key.id) {
+    seenIds.add(msg.key.id);
+    if (seenIds.size > 2000) seenIds.clear();
+  }
+  const text = extractText(msg);
+  if (!text || !/https?:\/\//.test(text)) return;
+  for (const c of copiadores) {
+    if (c.source !== remote || !c.targets.length) continue;
+    const { out, converted } = convertTextLinks(text, c.affIds);
+    if (!converted) continue;
+    for (const t of c.targets) {
+      try {
+        await sock.sendMessage(t, { text: out });
+        await new Promise((r) => setTimeout(r, 1500));
+        if (pool) await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status) VALUES (gen_random_uuid(), $1, $2, $3, $4)', [c.userId, t, out, 'sent']).catch(() => {});
+      } catch (e) {
+        log.warn({ e: String(e).slice(0, 200) }, 'copiador envio falhou');
+      }
+    }
+  }
+}
 
 function checkAuth(req) {
   if (!TOKEN) return true;
@@ -46,6 +131,11 @@ async function connect() {
   const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 0] }));
   sock = makeWASocket({ version, auth: state, logger: pino({ level: 'warn' }) });
   sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    for (const m of messages || []) {
+      try { await handleCopiador(m); } catch (e) { log.warn(String(e).slice(0, 200)); }
+    }
+  });
   sock.ev.on('connection.update', async (u) => {
     const { connection, lastDisconnect, qr } = u;
     if (qr) {
@@ -119,7 +209,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/health') return sendJson(res, 200, { ok: true, connected });
   if (!checkAuth(req)) return sendJson(res, 401, { error: 'unauthorized' });
   if (url.pathname === '/status' && req.method === 'GET') {
-    return sendJson(res, 200, { connected, phone, qrUpdatedAt, lastError });
+    return sendJson(res, 200, { connected, phone, qrUpdatedAt, lastError, copiadores: copiadores.length });
   }
   if (url.pathname === '/qr' && req.method === 'GET') {
     return sendJson(res, 200, { connected, qr: qrDataUrl, updatedAt: qrUpdatedAt });
@@ -153,4 +243,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => log.info({ PORT }, 'worker http no ar'));
 connect().catch((e) => log.error(String(e)));
+loadCopiadores().catch(() => {});
 setInterval(tick, 15000);
+setInterval(loadCopiadores, 60000);
