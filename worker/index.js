@@ -98,17 +98,18 @@ async function shopeeShortLink(originUrl, subIds, creds) {
   return data.data.generateShortLink.shortLink;
 }
 
+// Encurtador próprio: grava no banco e devolve /r/xxxx (redirect direto, sem interstitial)
 async function shortenUrl(longUrl, userId, timeoutMs = 8000) {
   if (longUrl.length <= 60) return longUrl;
-  if (pool && userId) {
+  if (pool) {
     try {
-      const ex = await pool.query('SELECT code FROM "ShortLink" WHERE "userId" = $1 AND url = $2 LIMIT 1', [userId, longUrl]);
+      const ex = await pool.query('SELECT code FROM "ShortLink" WHERE url = $1 LIMIT 1', [longUrl]);
       if (ex.rows[0]) return `${WEB_URL}/r/${ex.rows[0].code}`;
     } catch { /* segue */ }
     for (let i = 0; i < 3; i++) {
-      const code = crypto.randomBytes(4).toString('base64url');
+      const code = crypto.randomBytes(3).toString('base64url');
       try {
-        await pool.query('INSERT INTO "ShortLink" (id, code, url, "userId") VALUES (gen_random_uuid(), $1, $2, $3)', [code, longUrl, userId]);
+        await pool.query('INSERT INTO "ShortLink" (id, code, url, "userId") VALUES (gen_random_uuid(), $1, $2, $3)', [code, longUrl, userId || null]);
         return `${WEB_URL}/r/${code}`;
       } catch { /* colisão */ }
     }
@@ -150,7 +151,7 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId) {
         converted++;
       }
       if (final) {
-        final = await shortenUrl(final, c.userId);
+        final = await shortenUrl(final, userId);
         out = out.split(raw).join(final);
       }
     } catch (e) {
