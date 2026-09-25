@@ -48,11 +48,12 @@ export function toAffiliateLink(originalUrl: string, affiliateId: string, store:
   return `${base}?af=${affiliateId}`;
 }
 
-// Mercado Livre: rastreio via matt_tool + matt_word (mesmo do Gerador de links)
+// Mercado Livre: rastreio via matt_tool + matt_word (mesmo do Gerador de links).
+// Remove parâmetros inúteis (ref, forceInApp...) para o link ficar curto.
 export function toMlAffiliateLink(originalUrl: string, tag: string, mattTool?: string): string {
-  const sep = originalUrl.includes('?') ? '&' : '?';
+  const base = originalUrl.split('?')[0].split('#')[0];
   const tool = mattTool || 'afiliados';
-  return `${originalUrl}${sep}matt_tool=${encodeURIComponent(tool)}&matt_word=${encodeURIComponent(tag)}`;
+  return `${base}?matt_tool=${encodeURIComponent(tool)}&matt_word=${encodeURIComponent(tag)}`;
 }
 
 const TEMPLATES: Record<string, (p: { title: string; priceFrom?: string; priceTo: string; link: string; coupon?: string }) => string> = {

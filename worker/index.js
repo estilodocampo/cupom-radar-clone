@@ -68,8 +68,8 @@ function toAffiliateLink(originalUrl, affiliateId, store) {
 }
 
 function toMlAffiliateLink(originalUrl, tag, mattTool) {
-  const sep = originalUrl.includes('?') ? '&' : '?';
-  return `${originalUrl}${sep}matt_tool=${encodeURIComponent(mattTool || 'afiliados')}&matt_word=${encodeURIComponent(tag)}`;
+  const base = originalUrl.split('?')[0].split('#')[0];
+  return `${base}?matt_tool=${encodeURIComponent(mattTool || 'afiliados')}&matt_word=${encodeURIComponent(tag)}`;
 }
 
 const crypto = require('crypto');
