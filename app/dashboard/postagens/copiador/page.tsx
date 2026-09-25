@@ -45,16 +45,9 @@ export default function Copiador() {
       <h1 className="h1">Modo Copiador</h1>
       <p className="sub">Monitore um grupo de origem e replique as ofertas com o seu link. <span className="badge badge-ok">Monitor ativo</span></p>
       <div className="card" style={{ maxWidth: 720 }}>
-        <label className="lbl">Grupo de origem (de onde copiar)</label>
-        {groups.length > 0 ? (
-          <select className="input" value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="">Selecione o grupo de origem…</option>
-            {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>
-        ) : (
-          <p className="hint">Conecte o WhatsApp no Config Robô para listar os grupos.</p>
-        )}
-        <input className="input" style={{ marginTop: 8 }} value={source} onChange={(e) => setSource(e.target.value)} placeholder="Ou cole o JID: 1203...@g.us" />
+        <label className="lbl">Grupo de origem (JID — manual)</label>
+        <input className="input" value={source} onChange={(e) => setSource(e.target.value)} placeholder="1203...@g.us" />
+        <p className="hint">Cole o JID do grupo de onde copiar. Seu número conectado precisa ser membro dele.</p>
         <label className="lbl" style={{ marginTop: 12 }}>Seus grupos destino (para onde enviar)</label>
         {groups.map((g) => (
           <label key={g.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0' }}>
