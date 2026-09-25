@@ -7,6 +7,7 @@ export default function Copiador() {
   const [source, setSource] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [extra, setExtra] = useState('');
+  const [keepCoupons, setKeepCoupons] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
 
   useEffect(() => {
@@ -15,11 +16,12 @@ export default function Copiador() {
       fetch('/api/whatsapp/groups').then((r) => r.json()).catch(() => null),
     ]).then(([d, g]) => {
       const it = (d?.items || []).find((x: { provider: string }) => x.provider === 'copiador');
-      const cfg = (it?.config || {}) as { source?: string; targets?: string[] };
+      const cfg = (it?.config || {}) as { source?: string; targets?: string[]; keepCoupons?: boolean };
       const saved = cfg.targets || [];
       const gl = (g?.groups || []) as Group[];
       setGroups(gl);
       setSource(cfg.source || '');
+      setKeepCoupons(!!cfg.keepCoupons);
       setPicked(saved.filter((t) => gl.some((x) => x.id === t)));
       setExtra(saved.filter((t) => !gl.some((x) => x.id === t)).join('\n'));
     }).catch(() => {});
@@ -34,7 +36,7 @@ export default function Copiador() {
     const manual = extra.split('\n').map((x) => x.trim()).filter(Boolean);
     const all = [...new Set([...picked, ...manual])];
     if (!all.length) { alert('Selecione ao menos um grupo destino.'); return; }
-    await fetch('/api/integrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'copiador', config: { source, targets: all } }) });
+    await fetch('/api/integrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'copiador', config: { source, targets: all, keepCoupons } }) });
     alert('✅ Copiador ativo! Novas ofertas do grupo de origem serão replicadas com seu link.');
   }
 
@@ -55,6 +57,9 @@ export default function Copiador() {
           </label>
         ))}
         <textarea className="input" rows={2} style={{ marginTop: 8 }} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="JIDs extras, um por linha (opcional)" />
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+          <input type="checkbox" checked={keepCoupons} onChange={(e) => setKeepCoupons(e.target.checked)} /> Manter cupons da origem
+        </label>
         <button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={save}>Salvar configuração</button>
         <p className="hint" style={{ marginTop: 8 }}>O número conectado precisa ser membro do grupo de origem. O worker recarrega a config em até 60s. Só replica mensagens novas com link de loja que você configurou.</p>
       </div>

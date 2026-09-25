@@ -233,7 +233,7 @@ async function shortenUrl(longUrl, userId, timeoutMs = 8000) {
   return longUrl;
 }
 
-async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId) {
+async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, stripCoupons = true) {
   let converted = 0;
   const urls = [...new Set(text.match(/https?:\/\/[^\s)]+/g) || [])];
   let out = text;
@@ -276,6 +276,8 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId) {
       log.warn({ e: String(e).slice(0, 150) }, 'conversao falhou, mantendo original');
     }
   }
+  // Remove linhas de cupom da origem (ex.: "Cupom: MELHORCUPOM") — não valem no seu grupo
+  if (stripCoupons) out = out.split('\n').filter((l) => !/cupom/i.test(l)).join('\n').replace(/\n{3,}/g, '\n\n');
   return { out, converted };
 }
 
@@ -296,7 +298,7 @@ async function loadCopiadores() {
     }
     copiadores = Object.entries(byUser)
       .filter(([, v]) => v.copiador && v.copiador.source)
-      .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null }));
+      .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], keepCoupons: !!v.copiador.keepCoupons, affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null }));
     if (copiadores.length) log.info({ n: copiadores.length }, 'copiadores ativos');
   } catch (e) {
     log.warn({ e: String(e) }, 'load copiadores falhou');
@@ -333,7 +335,7 @@ async function handleCopiador(msg) {
   }
   for (const c of copiadores) {
     if (c.source !== remote || !c.targets.length) continue;
-    const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId);
+    const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons);
     if (!converted) continue;
     const caption = out.length > 1000 ? out.slice(0, 1000) : out;
     const rest = out.length > 1000 ? out.slice(1000) : '';
