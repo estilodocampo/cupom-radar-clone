@@ -49,6 +49,14 @@ export default function Robo() {
 
   useEffect(() => { load(); }, []);
 
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('ml');
+    if (q === 'ok') alert('✅ Conta Mercado Livre conectada!');
+    else if (q === 'negado') alert('❌ Autorização negada no Mercado Livre.');
+    else if (q === 'erro_token') alert('❌ ML aprovou, mas a troca do token falhou (confira APP ID/Secret e URI de redirect).');
+    else if (q) alert(`❌ Falha na conexão ML (${q}). Tente de novo.`);
+  }, []);
+
   async function save(provider: string, config: Record<string, unknown>) {
     await fetch('/api/integrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, config }) });
     setDone(true);
