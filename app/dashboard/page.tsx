@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
+import Whatsapp from './whatsapp';
 
 const PAID_PLANS = [
   { id: 'premium', label: 'Premium - R$159,90/ano' },
@@ -59,6 +60,7 @@ export default function Dashboard() {
           <button onClick={() => checkout(p.id)}>Assinar</button>
         </div>
       ))}
+      {status === 'authenticated' && <Whatsapp />}
     </main>
   );
 }
