@@ -460,10 +460,48 @@ async function sendText(to, text) {
   await sock.sendMessage(to, { text });
 }
 
+// Indica em quais grupos o usuário pode enviar: é admin (ou não éRestrito)
+const meId = () => (sock?.user?.id || '').split(':')[0];
+const meLid = () => (sock?.user?.lid || '').split('@')[0];
+
+function canSendTo(g) {
+  if (!g.participants) return true; // sem dados: não bloqueia
+  const adm = g.participants.filter((p) => p.admin);
+  if (!adm.length) return true;
+  const me = meId();
+  const lid = meLid();
+  return adm.some((p) => {
+    const pn = (p.id || '').split('@')[0].split(':')[0];
+    const pl = (p.lid || '').split('@')[0];
+    return (me && pn === me) || (lid && pl === lid);
+  });
+}
+
 async function listGroups() {
   if (!sock || !connected) return [];
   const chats = await sock.groupFetchAllParticipating().catch(() => ({}));
-  return Object.values(chats).map((g) => ({ id: g.id, name: g.subject }));
+  return Object.values(chats).map((g) => {
+    const total = g.participants ? g.participants.length : null;
+    const admins = g.participants ? g.participants.filter((p) => p.admin).length : null;
+    return { id: g.id, name: g.subject, total, admins, canSend: canSendTo(g) };
+  });
+}
+
+// Grupos já configurados pelo usuário (para destacar na UI)
+async function groupsInUse() {
+  const out = [];
+  if (!pool) return out;
+  try {
+    const { rows } = await pool.query('SELECT provider, config FROM "Integration"');
+    for (const r of rows) {
+      const c = r.config || {};
+      if (r.provider === 'copiador') out.push(...(c.targets || []));
+      else if (r.provider === 'envio_auto' && c.groupJid) out.push(c.groupJid);
+      else if (r.provider === 'boasvindas') out.push(...(c.targets || []));
+      else if (r.provider === 'lista_envio') out.push(...((c.groups || []).map((g: { id?: string }) => g.id).filter(Boolean)));
+    }
+  } catch { /* ignora */ }
+  return [...new Set(out)];
 }
 
 // Scheduler: envia posts agendados vencidos
@@ -592,7 +630,8 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === '/groups' && req.method === 'GET') {
     const groups = await listGroups().catch(() => []);
-    return sendJson(res, 200, { groups });
+    const inUse = new Set(await groupsInUse());
+    return sendJson(res, 200, { groups: groups.map((g) => ({ ...g, inUse: inUse.has(g.id) })) });
   }
   if (url.pathname === '/participants' && req.method === 'GET') {
     const groupJid = url.searchParams.get('groupJid') || '';

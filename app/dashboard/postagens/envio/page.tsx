@@ -1,9 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
 
+type Group = { id: string; name: string; total: number | null; admins: number | null; canSend: boolean; inUse?: boolean };
+
 export default function Envio() {
   const [connected, setConnected] = useState(false);
-  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [groupJid, setGroupJid] = useState('');
   const [autoNovo, setAutoNovo] = useState(true);
   const [linkMode, setLinkMode] = useState('site');
@@ -48,20 +50,51 @@ export default function Envio() {
     loadGroups();
   }
 
+  const podeEnviar = groups.filter((g) => g.canSend);
+  const semPermissao = groups.filter((g) => !g.canSend);
+
   return (
     <>
       <div className="topbar">
         <h1 className="h1" style={{ margin: 0 }}>WhatsApp</h1>
         <span className={`badge ${connected ? 'badge-ok' : 'badge-warn'}`}>{connected ? '● conectado' : '▲ desconectado'}</span>
       </div>
+
       <div className="card">
-        <h3>💬 Envio automático no grupo</h3>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', marginTop: 12 }}>
+        <h3>👥 Meus grupos</h3>
+        <p className="hint">Grupos em que o número conectado pode enviar. Ao entrar num grupo novo, ele aparece aqui — use “Recarregar grupos”.</p>
+        {groups.length === 0 ? (
+          <p className="hint" style={{ marginTop: 8 }}>{connected ? 'Nenhum grupo encontrado.' : 'Conecte o WhatsApp no Config Robô para listar os grupos.'}</p>
+        ) : (
+          <div className="glist" style={{ marginTop: 10 }}>
+            {podeEnviar.map((g) => (
+              <button
+                type="button"
+                key={g.id}
+                className={`gitem${groupJid === g.id ? ' sel' : ''}${g.inUse ? ' inuse' : ''}`}
+                onClick={() => setGroupJid(g.id)}
+              >
+                <span className="gname">{g.name || g.id}</span>
+                <span className="gmeta">
+                  {g.total !== null && `${g.total} membros`}
+                  {g.inUse && <span className="gtag">em uso</span>}
+                </span>
+              </button>
+            ))}
+            {semPermissao.length > 0 && (
+              <p className="hint" style={{ marginTop: 8 }}>
+                {semPermissao.length} grupo(s) onde você não é admin e não consegue enviar: {semPermissao.map((g) => g.name).join(', ')}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', marginTop: 14 }}>
           <div>
             <label className="lbl">Grupo do WhatsApp</label>
             <select className="input" value={groupJid} onChange={(e) => setGroupJid(e.target.value)}>
               <option value="">Selecione...</option>
-              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              {podeEnviar.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
             <p className="hint">Entre com sua conta em pelo menos um grupo para ele aparecer aqui.</p>
           </div>
