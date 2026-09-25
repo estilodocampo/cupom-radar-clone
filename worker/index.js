@@ -110,8 +110,45 @@ function titleHints(text) {
     .slice(0, 3);
 }
 
-// Vitrine ML (/social/...) -> URL do anúncio real, casando o título da mensagem.
-// Só troca com confiança (score >= 0.4); senão devolve null e mantém a vitrine com rastreio.
+// Busca externa gratuita (DuckDuckGo, sem chave): encontra a página do anúncio
+// pelo título quando a vitrine não lista o produto. Só aceita quase-exato
+// (score >= 0.7) para não trocar por produto parecido de outro vendedor.
+async function resolveMlDdg(hints, timeoutMs = 8000) {
+  try {
+    if (!hints.length) return null;
+    const q = encodeURIComponent('site:produto.mercadolivre.com.br ' + normWords(hints[0]).join(' '));
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const r = await fetch(`https://html.duckduckgo.com/html/?q=${q}`, {
+      signal: ctrl.signal,
+      headers: { 'User-Agent': BROWSER_UA2, 'Accept-Language': 'pt-BR,pt;q=0.9' },
+    });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const html = await r.text();
+    const re = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+    let m, best = null, bestScore = 0;
+    while ((m = re.exec(html))) {
+      let href = m[1];
+      const ud = href.match(/[?&]uddg=([^&]+)/);
+      if (ud) { try { href = decodeURIComponent(ud[1]); } catch { /* mantém */ } }
+      if (!/produto\.mercadolivre\.com\.br\/MLB-[0-9]+/.test(href)) continue;
+      const title = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      const tw = normWords(title);
+      if (!tw.length) continue;
+      for (const h of hints) {
+        const hw = normWords(h);
+        if (!hw.length) continue;
+        const score = hw.filter((w) => tw.includes(w)).length / hw.length;
+        if (score > bestScore) { bestScore = score; best = href.split('?')[0].split('#')[0]; }
+      }
+      if (bestScore >= 0.95) break;
+    }
+    return bestScore >= 0.7 ? best : null;
+  } catch {
+    return null;
+  }
+}
 async function resolveMlShowcase(showcaseUrl, hints, timeoutMs = 10000) {
   try {
     if (!/\/social\//.test(showcaseUrl) || !hints.length) return null;
@@ -210,11 +247,22 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId) {
         final = await shopeeShortLink(url.split('?')[0], ['cupomradar'], shopeeCreds);
         converted++;
       } else if (store === 'mercadolivre' && affIds[store]) {
-        // Se a origem postou vitrine (/social/), tenta resolver para a página do anúncio
-        const resolved = await resolveMlShowcase(url, titleHints(text)).catch(() => null);
-        if (/\/social\//.test(url) && !resolved) log.warn({ url: url.slice(0, 120) }, 'vitrine ML sem produto correspondente; mantendo vitrine com rastreio');
-        if (resolved) log.info('vitrine ML resolvida para a página do anúncio');
-        final = toMlAffiliateLink(resolved || url, affIds[store], mlMattTool);
+        // Origem postou vitrine (/social/): tenta resolver para a página do anúncio.
+        // 1) produtos listados na própria vitrine  2) busca externa gratuita  3) mantém vitrine com rastreio.
+        const hints = titleHints(text);
+        let base = url;
+        const viaHtml = await resolveMlShowcase(url, hints).catch(() => null);
+        if (viaHtml) {
+          base = viaHtml;
+          log.info('vitrine ML resolvida via HTML da vitrine');
+        } else if (/\/social\//.test(url)) {
+          const viaDdg = await resolveMlDdg(hints).catch(() => null);
+          if (viaDdg) {
+            base = viaDdg;
+            log.info('vitrine ML resolvida via busca');
+          } else log.warn({ url: url.slice(0, 120) }, 'vitrine ML sem produto correspondente; mantendo vitrine com rastreio');
+        }
+        final = toMlAffiliateLink(base, affIds[store], mlMattTool);
         converted++;
       } else if (store !== 'unknown' && store !== 'mercadolivre' && affIds[store]) {
         final = toAffiliateLink(url, affIds[store], store);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { detectStore, expandUrl, toAffiliateLink, toMlAffiliateLink, buildPost, resolveMlShowcase } from '../../../lib/shopee-parser';
+import { detectStore, expandUrl, toAffiliateLink, toMlAffiliateLink, buildPost, resolveMlShowcase, resolveMlDdg } from '../../../lib/shopee-parser';
 import { authOptions } from '../../../lib/auth';
 import { prisma } from '../../../lib/prisma';
 import { checkPostLimit, incrementPostUsage } from '../../../lib/subscription';
@@ -68,10 +68,13 @@ export async function POST(req: NextRequest) {
       }
     }
   }
-  // Se colaram vitrine (/social/), tenta resolver para a página do anúncio
+  // Se colaram vitrine (/social/), tenta resolver para a página do anúncio:
+  // 1) produtos na própria vitrine  2) busca externa gratuita  3) mantém vitrine com rastreio.
   let mlBase = url;
   if (store === 'mercadolivre' && /\/social\//.test(url)) {
-    mlBase = (await resolveMlShowcase(url, [title]).catch(() => null)) || url;
+    mlBase = (await resolveMlShowcase(url, [title]).catch(() => null))
+      || (await resolveMlDdg([title]).catch(() => null))
+      || url;
   }
   const affLink0 =
     short ||

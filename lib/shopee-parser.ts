@@ -80,8 +80,48 @@ function normWords(s: string): string[] {
     .replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !TITLE_STOP.has(w));
 }
 
-// Vitrine ML (/social/...) -> URL do anúncio real, casando o título.
-// Só troca com confiança (score >= 0.4); senão devolve null.
+// Busca externa gratuita (DuckDuckGo, sem chave): encontra a página do anúncio
+// pelo título quando a vitrine não lista o produto. Só aceita quase-exato
+// (score >= 0.7) para não trocar por produto parecido de outro vendedor.
+export async function resolveMlDdg(hints: string[], timeoutMs = 8000): Promise<string | null> {
+  try {
+    if (!hints.length) return null;
+    const q = encodeURIComponent('site:produto.mercadolivre.com.br ' + normWords(hints[0]).join(' '));
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const r = await fetch(`https://html.duckduckgo.com/html/?q=${q}`, {
+      signal: ctrl.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+      },
+    });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const html = await r.text();
+    const re = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+    let m: RegExpExecArray | null, best: string | null = null, bestScore = 0;
+    while ((m = re.exec(html))) {
+      let href = m[1];
+      const ud = href.match(/[?&]uddg=([^&]+)/);
+      if (ud) { try { href = decodeURIComponent(ud[1]); } catch { /* mantém */ } }
+      if (!/produto\.mercadolivre\.com\.br\/MLB-[0-9]+/.test(href)) continue;
+      const title = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      const tw = normWords(title);
+      if (!tw.length) continue;
+      for (const h of hints) {
+        const hw = normWords(h);
+        if (!hw.length) continue;
+        const score = hw.filter((w) => tw.includes(w)).length / hw.length;
+        if (score > bestScore) { bestScore = score; best = href.split('?')[0].split('#')[0]; }
+      }
+      if (bestScore >= 0.95) break;
+    }
+    return bestScore >= 0.7 ? best : null;
+  } catch {
+    return null;
+  }
+}
 export async function resolveMlShowcase(showcaseUrl: string, hints: string[], timeoutMs = 10000): Promise<string | null> {
   try {
     if (!/\/social\//.test(showcaseUrl) || !hints.length) return null;
