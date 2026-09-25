@@ -32,6 +32,7 @@ let lastError = null;
 const bootTime = Date.now();
 const seenIds = new Set();
 let copiadores = []; // [{userId, source, targets, affIds, minInterval, maxPerDay}]
+let distribuidores = []; // [{userId, hub, targets, ...}] — relé do seu grupo para outros
 let boasvindasCfgs = []; // [{userId, targets, text}]
 const sentAtByUser = new Map(); // userId -> timestamp do último envio (limite de frequência)
 const sentDays = new Map(); // userId -> { day, count } (limite diário)
@@ -292,6 +293,7 @@ async function loadCopiadores() {
     for (const r of rows) {
       byUser[r.userId] = byUser[r.userId] || { affIds: {} };
       if (r.provider === 'boasvindas') byUser[r.userId].boasvindas = r.config || {};
+      else if (r.provider === 'distribuidor') byUser[r.userId].distribuidor = r.config || {};
       else if (r.provider === 'copiador') byUser[r.userId].copiador = r.config || {};
       else if (r.provider === 'shopee_api' && r.config && r.config.appId && r.config.secret) byUser[r.userId].shopeeCreds = { appId: r.config.appId, secret: r.config.secret };
       else if (r.provider === 'mercadolivre' && r.config) {
@@ -304,6 +306,20 @@ async function loadCopiadores() {
       .filter(([, v]) => v.copiador && v.copiador.source)
       .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], keepCoupons: !!v.copiador.keepCoupons, minInterval: Number(v.copiador.minInterval) || 0, maxPerDay: Number(v.copiador.maxPerDay) || 0, affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null }));
     if (copiadores.length) log.info({ n: copiadores.length }, 'copiadores ativos');
+    distribuidores = Object.entries(byUser)
+      .filter(([, v]) => v.distribuidor && v.distribuidor.hub && (v.distribuidor.targets || []).length)
+      .map(([userId, v]) => {
+        const c = v.distribuidor;
+        return {
+          userId, kind: 'distribuidor', hub: c.hub, targets: c.targets || [],
+          onlyMine: !!c.onlyMine, requireLink: !!c.requireLink, convert: c.convert !== false,
+          stripCoupons: c.stripCoupons !== false,
+          prefix: String(c.prefix || '').slice(0, 300), suffix: String(c.suffix || '').slice(0, 300),
+          minInterval: Number(c.minInterval) || 0, maxPerDay: Number(c.maxPerDay) || 0,
+          affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null,
+        };
+      });
+    if (distribuidores.length) log.info({ n: distribuidores.length }, 'distribuidores ativos');
     boasvindasCfgs = Object.entries(byUser)
       .filter(([, v]) => v.boasvindas && (v.boasvindas.targets || []).length && v.boasvindas.text)
       .map(([userId, v]) => ({ userId, targets: v.boasvindas.targets || [], text: String(v.boasvindas.text).slice(0, 500) }));
@@ -317,25 +333,30 @@ function extractText(msg) {
   return m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || null;
 }
 
-// Aplica os limites de frequência e quantidade diária configurados no Copiador
+// Chave de contagem: separa Copiador e Distribuidor do mesmo usuário
+function limKey(c) { return `${c.userId}:${c.kind || 'copiador'}`; }
+
+// Aplica os limites de frequência e quantidade diária configurados pelo usuário
 function passaLimites(c) {
+  const k = limKey(c);
   if (c.maxPerDay > 0) {
     const today = new Date().toISOString().slice(0, 10);
-    const reg = sentDays.get(c.userId);
+    const reg = sentDays.get(k);
     if (reg && reg.day === today && reg.count >= c.maxPerDay) return false;
   }
   if (c.minInterval > 0) {
-    const last = sentAtByUser.get(c.userId) || 0;
+    const last = sentAtByUser.get(k) || 0;
     if (Date.now() - last < c.minInterval * 60000) return false;
   }
   return true;
 }
 
 function marcarEnvio(c) {
-  sentAtByUser.set(c.userId, Date.now());
+  const k = limKey(c);
+  sentAtByUser.set(k, Date.now());
   const today = new Date().toISOString().slice(0, 10);
-  const reg = sentDays.get(c.userId);
-  sentDays.set(c.userId, reg && reg.day === today ? { day: today, count: reg.count + 1 } : { day: today, count: 1 });
+  const reg = sentDays.get(k);
+  sentDays.set(k, reg && reg.day === today ? { day: today, count: reg.count + 1 } : { day: today, count: 1 });
 }
 
 async function handleCopiador(msg) {
@@ -387,8 +408,62 @@ async function handleCopiador(msg) {
   }
 }
 
-function checkAuth(req) {
-  if (!TOKEN) return true;
+// Distribuidor: o que você posta no SEU grupo é repassado para os demais.
+// Anti-loop: nunca reenvia a partir de um grupo que já é destino, e nunca
+// manda a mensagem de volta para o próprio hub.
+async function handleDistribuidor(msg) {
+  if (!msg || !msg.key) return;
+  const remote = msg.key.remoteJid || '';
+  if (!remote.endsWith('@g.us')) return;
+  const ts = Number(msg.messageTimestamp) * 1000;
+  if (ts < bootTime) return;
+  for (const d of distribuidores) {
+    if (d.hub !== remote) continue;
+    if (d.onlyMine && !msg.key.fromMe) continue;
+    const text = extractText(msg);
+    if (!text || !text.trim()) continue;
+    if (d.requireLink && !/https?:\/\//.test(text)) continue;
+    if (!passaLimites(d)) continue;
+    const targets = [...new Set(d.targets)].filter((t) => t !== d.hub);
+    if (!targets.length) continue;
+    let out = text;
+    if (d.convert) {
+      const r = await convertTextLinks(text, d.affIds, d.shopeeCreds, d.mlMattTool, d.userId, d.stripCoupons);
+      if (r.converted) out = r.out;
+    }
+    if (d.prefix) out = `${d.prefix}\n\n${out}`;
+    if (d.suffix) out = `${out}\n\n${d.suffix}`;
+    const hasImage = !!msg.message?.imageMessage;
+    const hasVideo = !!msg.message?.videoMessage;
+    let media = null;
+    if (hasImage || hasVideo) {
+      try { media = await downloadMediaMessage(msg, 'buffer', {}); }
+      catch (e) { log.warn({ e: String(e).slice(0, 120) }, 'distribuidor midia falhou, enviando so texto'); }
+    }
+    const caption = out.length > 1000 ? out.slice(0, 1000) : out;
+    const rest = out.length > 1000 ? out.slice(1000) : '';
+    let enviou = false;
+    for (const t of targets) {
+      try {
+        if (media && hasImage) await sock.sendMessage(t, { image: media, caption });
+        else if (media && hasVideo) await sock.sendMessage(t, { video: media, caption });
+        else await sock.sendMessage(t, { text: out });
+        if (rest && media) await sock.sendMessage(t, { text: rest });
+        await new Promise((r) => setTimeout(r, 1500));
+        enviou = true;
+        if (pool) await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status) VALUES (gen_random_uuid(), $1, $2, $3, $4)', [d.userId, t, out, 'sent']).catch(() => {});
+      } catch (e) {
+        log.warn({ e: String(e).slice(0, 200) }, 'distribuidor envio falhou');
+      }
+    }
+    if (enviou) {
+      marcarEnvio(d);
+      log.info({ hub: d.hub, targets: targets.length }, 'distribuidor repassou');
+    }
+  }
+}
+
+function checkAuth(req) {  if (!TOKEN) return true;
   const h = req.headers['x-worker-token'] || '';
   return h === TOKEN;
 }
@@ -407,6 +482,7 @@ async function connect() {
   sock.ev.on('messages.upsert', async ({ messages }) => {
     for (const m of messages || []) {
       try { await handleCopiador(m); } catch (e) { log.warn(String(e).slice(0, 200)); }
+      try { await handleDistribuidor(m); } catch (e) { log.warn(String(e).slice(0, 200)); }
     }
   });
   sock.ev.on('group-participants.update', async ({ id, participants, action }) => {

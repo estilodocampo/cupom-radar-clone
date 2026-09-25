@@ -6,6 +6,7 @@ const MODES = [
   { href: '/dashboard/postagens/copiador', icon: '📑', name: 'Modo Copiador', desc: 'Replique ofertas convertendo para o seu link.' },
   { href: '/dashboard/postagens/radar', icon: '📡', name: 'Radar Shopee', desc: 'Importe ofertas por palavra-chave no automático.', badge: 'NOVO' },
   { href: '/dashboard/postagens/sorteio', icon: '🎉', name: 'Sorteio + Boas-vindas', desc: 'Sorteie membros e receba novatos no automático.', badge: 'NOVO' },
+  { href: '/dashboard/postagens/distribuidor', icon: '🔀', name: 'Distribuidor', desc: 'Do seu grupo para os demais, com as suas regras.', badge: 'NOVO' },
 ];
 
 export default function PostagensHub() {

@@ -8,6 +8,7 @@ const QUICK = [
   { href: '/dashboard/postagens/produtos', icon: '📝', tone: 'green', name: 'Gerar Postagem', desc: 'Crie postagens prontas para compartilhar nas suas redes sociais.' },
   { href: '/dashboard/postagens/copiador', icon: '📑', tone: 'blue', name: 'Modo Copiador', desc: 'Replique ofertas do grupo de origem com o seu link de afiliado.' },
   { href: '/dashboard/postagens/radar', icon: '📡', tone: 'amber', name: 'Radar Shopee', desc: 'Importe ofertas por palavra-chave direto no seu grupo.', tag: 'NOVO' },
+  { href: '/dashboard/postagens/distribuidor', icon: '🔀', tone: 'blue', name: 'Distribuidor', desc: 'Repasse o que você posta no seu grupo para os demais.', tag: 'NOVO' },
   { href: '/dashboard/postagens/sorteio', icon: '🎉', tone: 'purple', name: 'Sorteio + Boas-vindas', desc: 'Sorteie membros e receba novatos automaticamente.', tag: 'NOVO' },
 ];
 
