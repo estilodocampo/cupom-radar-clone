@@ -12,7 +12,7 @@ export default function Produtos() {
     setResult('Gerando...');
     const res = await fetch('/api/generate-post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, title, priceTo }) });
     const data = await res.json();
-    setResult(data.text || JSON.stringify(data));
+    setResult((data.text || JSON.stringify(data)) + (data.warning ? `\n\n⚠️ ${data.warning}` : ''));
   }
 
   return (

@@ -35,12 +35,29 @@ let copiadores = []; // [{userId, source, targets, affIds}]
 // ---- Conversão de links (espelho de lib/shopee-parser) ----
 function detectStore(url) {
   const u = url.toLowerCase();
-  if (u.includes('shopee')) return 'shopee';
-  if (u.includes('amazon')) return 'amazon';
-  if (u.includes('mercadolivre') || u.includes('mercadolibre')) return 'mercadolivre';
+  if (u.includes('shopee') || u.includes('shope.ee')) return 'shopee';
+  if (u.includes('amazon') || u.includes('amzn.to') || u.includes('/a.co')) return 'amazon';
+  if (u.includes('mercadolivre') || u.includes('mercadolibre') || u.includes('meli.la')) return 'mercadolivre';
   if (u.includes('magalu') || u.includes('magazineluiza')) return 'magalu';
   if (u.includes('shein')) return 'shein';
   return 'unknown';
+}
+
+const SHORT_HOSTS = ['meli.la', 'shope.ee', 'amzn.to', 'a.co', 'bit.ly', 'tinyurl.com', 'is.gd'];
+
+async function expandUrl(url, timeoutMs = 8000) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    if (!SHORT_HOSTS.includes(host)) return url;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const res = await fetch(url, { redirect: 'follow', signal: ctrl.signal });
+    clearTimeout(t);
+    if (res.url && res.url !== url) return res.url;
+    return url;
+  } catch {
+    return url;
+  }
 }
 
 function toAffiliateLink(originalUrl, affiliateId, store) {
@@ -78,7 +95,8 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool) {
   const urls = [...new Set(text.match(/https?:\/\/[^\s)]+/g) || [])];
   let out = text;
   for (let raw of urls) {
-    const url = raw.replace(/[.,!?]+$/, '');
+    let url = raw.replace(/[.,!?]+$/, '');
+    url = await expandUrl(url).catch(() => url);
     const store = detectStore(url);
     try {
       if (store === 'shopee' && shopeeCreds) {

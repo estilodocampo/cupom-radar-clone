@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { detectStore, toAffiliateLink, toMlAffiliateLink, buildPost } from '../../../lib/shopee-parser';
+import { detectStore, expandUrl, toAffiliateLink, toMlAffiliateLink, buildPost } from '../../../lib/shopee-parser';
 import { authOptions } from '../../../lib/auth';
 import { prisma } from '../../../lib/prisma';
 import { checkPostLimit, incrementPostUsage } from '../../../lib/subscription';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { url, title, priceFrom, priceTo, coupon, affiliateId = 'SEU_ID' } = body;
+  let { url, title, priceFrom, priceTo, coupon, affiliateId = 'SEU_ID' } = body;
   if (!url || !title || !priceTo) {
     return NextResponse.json({ error: 'url, title, priceTo obrigatórios' }, { status: 400 });
   }
+  url = await expandUrl(url);
   // Se logado, impõe limite do plano e usa IDs de afiliado configurados
   let userId: string | null = null;
   try {
@@ -99,5 +100,5 @@ export async function POST(req: NextRequest) {
       }
     }
   }
-  return NextResponse.json({ store, affiliateLink: affLink, text, autoSent, convertedVia });
+  return NextResponse.json({ store, affiliateLink: affLink, text, autoSent, convertedVia, warning: affId === 'SEU_ID' ? 'Você não está logado ou não salvou seu ID desta loja — link sem rastreio.' : null });
 }

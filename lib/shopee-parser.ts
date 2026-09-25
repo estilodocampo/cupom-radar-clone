@@ -2,12 +2,32 @@ export type Store = 'shopee' | 'amazon' | 'mercadolivre' | 'magalu' | 'shein' | 
 
 export function detectStore(url: string): Store {
   const u = url.toLowerCase();
-  if (u.includes('shopee')) return 'shopee';
-  if (u.includes('amazon')) return 'amazon';
-  if (u.includes('mercadolivre') || u.includes('mercadolibre')) return 'mercadolivre';
+  if (u.includes('shopee') || u.includes('shope.ee')) return 'shopee';
+  if (u.includes('amazon') || u.includes('amzn.to') || u.includes('/a.co')) return 'amazon';
+  if (u.includes('mercadolivre') || u.includes('mercadolibre') || u.includes('meli.la')) return 'mercadolivre';
   if (u.includes('magalu') || u.includes('magazineluiza')) return 'magalu';
   if (u.includes('shein')) return 'shein';
   return 'unknown';
+}
+
+const SHORT_HOSTS = ['meli.la', 'shope.ee', 'amzn.to', 'a.co', 'bit.ly', 'tinyurl.com', 'is.gd'];
+
+// Expande links curtos (meli.la, shope.ee...) para a URL final antes de converter
+export async function expandUrl(url: string, timeoutMs = 8000): Promise<string> {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    if (!SHORT_HOSTS.includes(host)) return url;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const res = await fetch(url, { redirect: 'follow', signal: ctrl.signal });
+    clearTimeout(t);
+    if (res.url && res.url !== url) return res.url;
+    const loc = res.headers.get('location');
+    if (loc) return new URL(loc, url).toString();
+    return url;
+  } catch {
+    return url;
+  }
 }
 
 export function extractShortId(url: string): string {
