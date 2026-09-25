@@ -50,6 +50,11 @@ function toAffiliateLink(originalUrl, affiliateId, store) {
   return `${base}?af=${affiliateId}`;
 }
 
+function toMlAffiliateLink(originalUrl, tag, mattTool) {
+  const sep = originalUrl.includes('?') ? '&' : '?';
+  return `${originalUrl}${sep}matt_tool=${encodeURIComponent(mattTool || 'afiliados')}&matt_word=${encodeURIComponent(tag)}`;
+}
+
 const crypto = require('crypto');
 
 async function shopeeShortLink(originUrl, subIds, creds) {
@@ -68,7 +73,7 @@ async function shopeeShortLink(originUrl, subIds, creds) {
   return data.data.generateShortLink.shortLink;
 }
 
-async function convertTextLinks(text, affIds, shopeeCreds) {
+async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool) {
   let converted = 0;
   const urls = [...new Set(text.match(/https?:\/\/[^\s)]+/g) || [])];
   let out = text;
@@ -80,12 +85,15 @@ async function convertTextLinks(text, affIds, shopeeCreds) {
         const short = await shopeeShortLink(url.split('?')[0], ['cupomradar'], shopeeCreds);
         out = out.split(raw).join(short);
         converted++;
-      } else if (store !== 'unknown' && affIds[store]) {
+      } else if (store === 'mercadolivre' && affIds[store]) {
+        out = out.split(raw).join(toMlAffiliateLink(url, affIds[store], mlMattTool));
+        converted++;
+      } else if (store !== 'unknown' && store !== 'mercadolivre' && affIds[store]) {
         out = out.split(raw).join(toAffiliateLink(url, affIds[store], store));
         converted++;
       }
     } catch (e) {
-      log.warn({ e: String(e).slice(0, 150) }, 'conversao shopee falhou, mantendo original');
+      log.warn({ e: String(e).slice(0, 150) }, 'conversao falhou, mantendo original');
     }
   }
   return { out, converted };
@@ -100,11 +108,15 @@ async function loadCopiadores() {
       byUser[r.userId] = byUser[r.userId] || { affIds: {} };
       if (r.provider === 'copiador') byUser[r.userId].copiador = r.config || {};
       else if (r.provider === 'shopee_api' && r.config && r.config.appId && r.config.secret) byUser[r.userId].shopeeCreds = { appId: r.config.appId, secret: r.config.secret };
+      else if (r.provider === 'mercadolivre' && r.config) {
+        if (r.config.mattTool) byUser[r.userId].mlMattTool = r.config.mattTool;
+        if (r.config.affiliateId) byUser[r.userId].affIds[r.provider] = r.config.affiliateId;
+      }
       else if (r.provider && r.config && r.config.affiliateId) byUser[r.userId].affIds[r.provider] = r.config.affiliateId;
     }
     copiadores = Object.entries(byUser)
       .filter(([, v]) => v.copiador && v.copiador.source)
-      .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], affIds: v.affIds, shopeeCreds: v.shopeeCreds || null }));
+      .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null }));
     if (copiadores.length) log.info({ n: copiadores.length }, 'copiadores ativos');
   } catch (e) {
     log.warn({ e: String(e) }, 'load copiadores falhou');
@@ -130,7 +142,7 @@ async function handleCopiador(msg) {
   if (!text || !/https?:\/\//.test(text)) return;
   for (const c of copiadores) {
     if (c.source !== remote || !c.targets.length) continue;
-    const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds);
+    const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool);
     if (!converted) continue;
     for (const t of c.targets) {
       try {

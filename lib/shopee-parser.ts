@@ -28,6 +28,13 @@ export function toAffiliateLink(originalUrl: string, affiliateId: string, store:
   return `${base}?af=${affiliateId}`;
 }
 
+// Mercado Livre: rastreio via matt_tool + matt_word (mesmo do Gerador de links)
+export function toMlAffiliateLink(originalUrl: string, tag: string, mattTool?: string): string {
+  const sep = originalUrl.includes('?') ? '&' : '?';
+  const tool = mattTool || 'afiliados';
+  return `${originalUrl}${sep}matt_tool=${encodeURIComponent(tool)}&matt_word=${encodeURIComponent(tag)}`;
+}
+
 const TEMPLATES: Record<string, (p: { title: string; priceFrom?: string; priceTo: string; link: string; coupon?: string }) => string> = {
   shopee: ({ title, priceFrom, priceTo, link, coupon }) =>
     `🔥 OFERTA SHOPEE 🔥\n\n📌 ${title}\n${priceFrom ? `❌ De: ${priceFrom}\n` : ''}✅ Por: ${priceTo}\n${coupon ? `🎟️ Cupom: ${coupon}\n` : ''}\n👉 ${link}\n\n⚠️ Estoque limitado!`,

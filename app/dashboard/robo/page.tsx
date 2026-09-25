@@ -26,6 +26,7 @@ export default function Robo() {
   const [modal, setModal] = useState<Modal>(null);
   const [done, setDone] = useState(false);
   const [mlOk, setMlOk] = useState(false);
+  const [mlMatt, setMlMatt] = useState('');
   const [shAppId, setShAppId] = useState('');
   const [shSecret, setShSecret] = useState('');
 
@@ -40,6 +41,7 @@ export default function Robo() {
     const map: Record<string, string> = {};
     for (const it of integ?.items || []) {
       if (it.provider === 'telegram') setTg((it.config?.botToken as string) || '');
+      else if (it.provider === 'mercadolivre') { setMlMatt((it.config?.mattTool as string) || ''); map[it.provider] = (it.config?.affiliateId as string) || ''; }
       else if (it.provider === 'mercadolivre_oauth') setMlOk(true);
       else if (it.provider === 'shopee_api') { setShAppId((it.config?.appId as string) || ''); setShSecret((it.config?.secret as string) || ''); }
       else if (it.provider === 'templates') { const m = (it.config || {}) as Record<string, string>; setTplMap(m); setTplText((prev) => prev || m[tplStore] || ''); }
@@ -182,6 +184,13 @@ export default function Robo() {
                 <h3><span className="store-logo">{storeCfg(modal.store).name}</span></h3>
                 <p className="hint">{storeCfg(modal.store).desc}</p>
                 <input className="input" value={forms[modal.store] || ''} onChange={(e) => setForms({ ...forms, [modal.store]: e.target.value })} placeholder={storeCfg(modal.store).field} />
+                {modal.store === 'mercadolivre' && (
+                  <>
+                    <label className="lbl">Matt Tool ID</label>
+                    <input className="input" value={mlMatt} onChange={(e) => setMlMatt(e.target.value)} placeholder="Ex: 78793736" />
+                    <p className="hint">Gere qualquer link no Gerador de links do painel ML e copie o valor de <b>matt_tool</b> dele.</p>
+                  </>
+                )}
                 {modal.store === 'shopee' && (
                   <>
                     <label className="lbl">App ID da API de afiliado</label>
@@ -196,7 +205,9 @@ export default function Robo() {
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-primary btn-sm" onClick={async () => {
-                    await save(modal.store, { affiliateId: forms[modal.store] || '' });
+                    const cfg: Record<string, string> = { affiliateId: forms[modal.store] || '' };
+                    if (modal.store === 'mercadolivre' && mlMatt) cfg.mattTool = mlMatt;
+                    await save(modal.store, cfg);
                     if (modal.store === 'shopee' && shAppId && shSecret) await save('shopee_api', { appId: shAppId, secret: shSecret });
                   }}>{done ? 'Salvo ✓' : 'Salvar'}</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>Fechar</button>

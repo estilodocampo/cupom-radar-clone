@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { detectStore, toAffiliateLink, buildPost } from '../../../lib/shopee-parser';
+import { detectStore, toAffiliateLink, toMlAffiliateLink, buildPost } from '../../../lib/shopee-parser';
 import { authOptions } from '../../../lib/auth';
 import { prisma } from '../../../lib/prisma';
 import { checkPostLimit, incrementPostUsage } from '../../../lib/subscription';
@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
   }
   const store = detectStore(url);
   let affId = affiliateId;
+  let mlMattTool: string | undefined;
   let finalCoupon = coupon as string | undefined;
   let template: string | null = null;
   let hook: string | null = null;
@@ -40,8 +41,9 @@ export async function POST(req: NextRequest) {
       prisma.integration.findUnique({ where: { userId_provider: { userId, provider: 'templates' } } }).catch(() => null),
       prisma.integration.findUnique({ where: { userId_provider: { userId, provider: 'ganchos' } } }).catch(() => null),
     ]);
-    const scfg = storeInteg?.config as { affiliateId?: string } | null;
+    const scfg = storeInteg?.config as { affiliateId?: string; mattTool?: string } | null;
     if (scfg?.affiliateId) affId = scfg.affiliateId;
+    if (scfg?.mattTool) mlMattTool = scfg.mattTool;
     const ccfg = cupons?.config as Record<string, string> | null;
     if (ccfg?.[store]) finalCoupon = ccfg[store];
     const tcfg = templates?.config as Record<string, string> | null;
@@ -65,7 +67,11 @@ export async function POST(req: NextRequest) {
       }
     }
   }
-  const affLink = short || toAffiliateLink(url, affId, store);
+  const affLink =
+    short ||
+    (store === 'mercadolivre' && affId !== 'SEU_ID'
+      ? toMlAffiliateLink(url, affId, mlMattTool)
+      : toAffiliateLink(url, affId, store));
   let text: string;
   if (template) {
     text = template
