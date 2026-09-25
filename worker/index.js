@@ -31,8 +31,10 @@ let qrUpdatedAt = null;
 let lastError = null;
 const bootTime = Date.now();
 const seenIds = new Set();
-let copiadores = []; // [{userId, source, targets, affIds}]
+let copiadores = []; // [{userId, source, targets, affIds, minInterval, maxPerDay}]
 let boasvindasCfgs = []; // [{userId, targets, text}]
+const sentAtByUser = new Map(); // userId -> timestamp do último envio (limite de frequência)
+const sentDays = new Map(); // userId -> { day, count } (limite diário)
 
 // ---- Conversão de links (espelho de lib/shopee-parser) ----
 function detectStore(url) {
@@ -300,7 +302,7 @@ async function loadCopiadores() {
     }
     copiadores = Object.entries(byUser)
       .filter(([, v]) => v.copiador && v.copiador.source)
-      .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], keepCoupons: !!v.copiador.keepCoupons, affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null }));
+      .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], keepCoupons: !!v.copiador.keepCoupons, minInterval: Number(v.copiador.minInterval) || 0, maxPerDay: Number(v.copiador.maxPerDay) || 0, affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null }));
     if (copiadores.length) log.info({ n: copiadores.length }, 'copiadores ativos');
     boasvindasCfgs = Object.entries(byUser)
       .filter(([, v]) => v.boasvindas && (v.boasvindas.targets || []).length && v.boasvindas.text)
@@ -313,6 +315,27 @@ async function loadCopiadores() {
 function extractText(msg) {
   const m = msg.message || {};
   return m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || null;
+}
+
+// Aplica os limites de frequência e quantidade diária configurados no Copiador
+function passaLimites(c) {
+  if (c.maxPerDay > 0) {
+    const today = new Date().toISOString().slice(0, 10);
+    const reg = sentDays.get(c.userId);
+    if (reg && reg.day === today && reg.count >= c.maxPerDay) return false;
+  }
+  if (c.minInterval > 0) {
+    const last = sentAtByUser.get(c.userId) || 0;
+    if (Date.now() - last < c.minInterval * 60000) return false;
+  }
+  return true;
+}
+
+function marcarEnvio(c) {
+  sentAtByUser.set(c.userId, Date.now());
+  const today = new Date().toISOString().slice(0, 10);
+  const reg = sentDays.get(c.userId);
+  sentDays.set(c.userId, reg && reg.day === today ? { day: today, count: reg.count + 1 } : { day: today, count: 1 });
 }
 
 async function handleCopiador(msg) {
@@ -340,10 +363,13 @@ async function handleCopiador(msg) {
   }
   for (const c of copiadores) {
     if (c.source !== remote || !c.targets.length) continue;
+    // Limites de frequência/quantidade definidos pelo usuário
+    if (!passaLimites(c)) continue;
     const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons);
     if (!converted) continue;
     const caption = out.length > 1000 ? out.slice(0, 1000) : out;
     const rest = out.length > 1000 ? out.slice(1000) : '';
+    let enviou = false;
     for (const t of c.targets) {
       try {
         if (media && hasImage) await sock.sendMessage(t, { image: media, caption });
@@ -351,11 +377,13 @@ async function handleCopiador(msg) {
         else await sock.sendMessage(t, { text: out });
         if (rest && media) await sock.sendMessage(t, { text: rest });
         await new Promise((r) => setTimeout(r, 1500));
+        enviou = true;
         if (pool) await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status) VALUES (gen_random_uuid(), $1, $2, $3, $4)', [c.userId, t, out, 'sent']).catch(() => {});
       } catch (e) {
         log.warn({ e: String(e).slice(0, 200) }, 'copiador envio falhou');
       }
     }
+    if (enviou) marcarEnvio(c);
   }
 }
 
