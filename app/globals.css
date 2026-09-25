@@ -147,7 +147,11 @@ body.light .sidebar { background: #e8eef6; }
   }
   body.mob-open .sidebar { transform: translateX(0); }
   body.mob-open { overflow: hidden; }
-  .mob-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 60; border: 0; }
+  .mob-backdrop { display: block; position: fixed; top: 0; bottom: 0; right: 0; left: 46px; background: rgba(0,0,0,.45); z-index: 60; border: 0; }
+  /* O conteúdo desliza junto com o drawer (evita sobreposição) */
+  .main { transform: translateX(46px); transition: transform .22s ease; }
+  /* O conteúdo desliza junto com o drawer (evita sobreposição) */
+  .main { transform: translateX(46px); transition: transform .22s ease; }
   .mobile-bar {
     display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 50;
     padding: 10px 14px; background: rgba(10,15,30,.92); backdrop-filter: blur(8px);
