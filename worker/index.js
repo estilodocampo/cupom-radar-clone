@@ -402,30 +402,27 @@ async function enfileirar(c, targetJid, text, mediaBuf, mediaType) {
   }
 }
 
-// Envia para um destino: se a mídia for grande demais, ignora a fila e vai agora
-async function enviarOuEnfileirar(c, targetJid, text, mediaBuf, mediaType) {
-  const grande = mediaBuf && mediaBuf.length >= MEDIA_MAX_B64;
-  if (grande) {
+// Envia um mesmo texto para VÁRIOS grupos contando 1 única janela de frequência.
+// (Bug anterior: a janela era consumida a cada grupo, deixando o repasse 13x mais lento.)
+async function enviarOuEnfileirarLote(c, targets, text, mediaBuf, mediaType) {
+  if (!targets.length) return false;
+  const grande = !!(mediaBuf && mediaBuf.length >= MEDIA_MAX_B64);
+  // Mídia grande demais não cabe na fila: entra na hora, ignorando o intervalo
+  if (!grande && !(await passaLimites(c))) {
+    for (const t of targets) await enfileirar(c, t, text, mediaBuf, mediaType);
+    return false;
+  }
+  let ok = 0;
+  for (const t of targets) {
     try {
-      await sendComMidia(targetJid, text, mediaBuf, mediaType);
-      marcarEnvio(c);
-      return true;
+      await sendComMidia(t, text, mediaBuf, mediaType);
+      ok++;
     } catch (e) {
-      log.warn({ e: String(e).slice(0, 200) }, 'envio imediato falhou');
-      return false;
+      log.warn({ e: String(e).slice(0, 200), to: t }, 'envio falhou');
     }
   }
-  if (await passaLimites(c)) {
-    try {
-      await sendComMidia(targetJid, text, mediaBuf, mediaType);
-      marcarEnvio(c);
-      return true;
-    } catch (e) {
-      log.warn({ e: String(e).slice(0, 200) }, 'envio falhou');
-      return false;
-    }
-  }
-  return enfileirar(c, targetJid, text, mediaBuf, mediaType);
+  if (ok) marcarEnvio(c);
+  return ok > 0;
 }
 
 async function sendComMidia(targetJid, text, mediaBuf, mediaType) {
@@ -465,9 +462,7 @@ async function handleCopiador(msg) {
     if (c.source !== remote || !c.targets.length) continue;
     const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons);
     if (!converted) continue;
-    for (const t of c.targets) {
-      await enviarOuEnfileirar(c, t, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
-    }
+    await enviarOuEnfileirarLote(c, c.targets, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
   }
 }
 
@@ -549,9 +544,7 @@ async function handleDistribuidor(msg) {
       try { media = await downloadMediaMessage(msg, 'buffer', {}); }
       catch (e) { log.warn({ e: String(e).slice(0, 120) }, 'distribuidor midia falhou, enviando so texto'); }
     }
-    for (const t of targets) {
-      await enviarOuEnfileirar(d, t, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
-    }
+    await enviarOuEnfileirarLote(d, targets, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
   }
 }
 
