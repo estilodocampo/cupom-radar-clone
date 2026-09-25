@@ -25,6 +25,7 @@ export default function Robo() {
   const [hooks, setHooks] = useState('');
   const [modal, setModal] = useState<Modal>(null);
   const [done, setDone] = useState(false);
+  const [mlOk, setMlOk] = useState(false);
 
   async function load() {
     const s = await fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null);
@@ -37,6 +38,7 @@ export default function Robo() {
     const map: Record<string, string> = {};
     for (const it of integ?.items || []) {
       if (it.provider === 'telegram') setTg((it.config?.botToken as string) || '');
+      else if (it.provider === 'mercadolivre_oauth') setMlOk(true);
       else if (it.provider === 'templates') { const m = (it.config || {}) as Record<string, string>; setTplMap(m); setTplText((prev) => prev || m[tplStore] || ''); }
       else if (it.provider === 'cupons') { const m = (it.config || {}) as Record<string, string>; setCpMap(m); setCpText((prev) => prev || m[cpStore] || ''); }
       else if (it.provider === 'ganchos') setHooks(((it.config?.items as string[]) || []).join('\n'));
@@ -169,6 +171,9 @@ export default function Robo() {
                 <h3><span className="store-logo">{storeCfg(modal.store).name}</span></h3>
                 <p className="hint">{storeCfg(modal.store).desc}</p>
                 <input className="input" value={forms[modal.store] || ''} onChange={(e) => setForms({ ...forms, [modal.store]: e.target.value })} placeholder={storeCfg(modal.store).field} />
+                {modal.store === 'mercadolivre' && (
+                  <p className="hint">Conta ML: {mlOk ? 'conectada ✓' : 'não conectada'} — <a href="/api/integrations/mercadolivre/auth">Conectar conta</a> (exige APP ID e Secret cadastrados no servidor)</p>
+                )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-primary btn-sm" onClick={() => save(modal.store, { affiliateId: forms[modal.store] || '' })}>{done ? 'Salvo ✓' : 'Salvar'}</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>Fechar</button>
