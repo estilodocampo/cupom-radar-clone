@@ -5,7 +5,6 @@ export default function Copiador() {
   const [source, setSource] = useState('');
   const [keepCoupons, setKeepCoupons] = useState(false);
   const [hub, setHub] = useState('');
-  const [fila, setFila] = useState(0);
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
@@ -23,13 +22,6 @@ export default function Copiador() {
       const nome = ((g?.groups || []) as { id: string; name: string }[]).find((x) => x.id === hubId)?.name;
       if (hubId) setMsg(`Enviando para o seu grupo: ${nome || hubId}`);
     }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const load = () => fetch('/api/whatsapp/status').then((r) => r.json()).then((d) => setFila(Number(d?.fila) || 0)).catch(() => {});
-    load();
-    const t = setInterval(load, 15000);
-    return () => clearInterval(t);
   }, []);
 
   async function save() {
@@ -61,7 +53,6 @@ export default function Copiador() {
         </label>
 
         <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={save}>Salvar</button>
-        {fila > 0 && <p className="hint" style={{ marginTop: 8 }}>⏳ <b>{fila}</b> oferta(s) aguardando envio na fila.</p>}
 
         <p className="hint" style={{ marginTop: 12 }}>
           O destino e o ritmo de envio ficam no <a href="/dashboard/postagens/distribuidor">Distribuidor</a>

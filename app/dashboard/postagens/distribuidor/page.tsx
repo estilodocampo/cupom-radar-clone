@@ -38,7 +38,6 @@ export default function Distribuidor() {
   const [pausado, setPausado] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [msg, setMsg] = useState('');
-  const [fila, setFila] = useState(0);
 
   useEffect(() => {
     Promise.all([
@@ -64,13 +63,6 @@ export default function Distribuidor() {
       setPicked(saved.filter((t) => gl.some((x) => x.id === t)));
       setExtra(saved.filter((t) => !gl.some((x) => x.id === t)).join('\n'));
     }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const load = () => fetch('/api/whatsapp/status').then((r) => r.json()).then((d) => setFila(Number(d?.fila) || 0)).catch(() => {});
-    load();
-    const t = setInterval(load, 15000);
-    return () => clearInterval(t);
   }, []);
 
   function toggle(id: string) {
@@ -195,7 +187,6 @@ export default function Distribuidor() {
         <p className="hint" style={{ marginTop: 8 }}>
           Trava anti-loop ativa: nunca repassa a partir de um grupo que já recebe, e nunca devolve ao seu hub. O worker aplica em até 60s.
         </p>
-        {fila > 0 && <p className="hint">⏳ <b>{fila}</b> mensagem(ns) aguardando envio na fila — nada se perde.</p>}
       </div>
     </>
   );

@@ -458,22 +458,17 @@ async function jaProcessou(c, targetJid, text) {
   }
 }
 
-// Enfileira em vez de descartar
-async function enfileirar(c, targetJid, text, mediaBuf, mediaType) {
-  if (!pool) { log.warn('sem banco: oferta descartada (fila indisponível)'); return false; }
-  const ok = await registrarOferta(c, targetJid, text, 'pending', mediaBuf, mediaType);
-  if (ok) log.info({ kind: c.kind, targetJid, fila: true }, 'oferta enfileirada (limite de frequência)');
-  return ok;
+// Enfileira (legado, sem uso): a fila foi removida — fora da janela, perde-se.
+async function enfileirar() {
+  return false;
 }
 
-// Envia um mesmo texto para VÁRIOS grupos contando 1 única janela de frequência.
-// Reserva antes de enviar (anti-duplicata atômico) e só envia o que reservou.
-async function enviarOuEnfileirarLote(c, targets, text, mediaBuf, mediaType) {
+// Sem fila: se não couber na janela, perde-se (decisão do usuário).
+// A trava anti-duplicata (reserva + marca) continua valendo.
+async function enviarLote(c, targets, text, mediaBuf, mediaType) {
   if (!targets.length) return false;
-  const grande = !!(mediaBuf && mediaBuf.length >= MEDIA_MAX_B64);
-  // Mídia grande demais não cabe na fila: entra na hora, ignorando o intervalo
-  if (!grande && !(await passaLimites(c))) {
-    for (const t of targets) await enfileirar(c, t, text, mediaBuf, mediaType);
+  if (!(await passaLimites(c))) {
+    log.info({ kind: c.kind }, 'fora da janela: oferta descartada (sem fila)');
     return false;
   }
   const reservados = await reservarDestinos(c, targets, text, mediaBuf, mediaType);
@@ -532,7 +527,7 @@ async function handleCopiador(msg) {
     if (c.source !== remote || !c.targets.length) continue;
     const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons);
     if (!converted) continue;
-    await enviarOuEnfileirarLote(c, c.targets, comMarca(out), media, hasImage ? 'image' : hasVideo ? 'video' : null);
+    await enviarLote(c, c.targets, comMarca(out), media, hasImage ? 'image' : hasVideo ? 'video' : null);
   }
 }
 
@@ -648,7 +643,7 @@ async function handleDistribuidor(msg) {
       try { media = await downloadMediaMessage(msg, 'buffer', {}); }
       catch (e) { log.warn({ e: String(e).slice(0, 120) }, 'distribuidor midia falhou, enviando so texto'); }
     }
-    await enviarOuEnfileirarLote(d, targets, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
+    await enviarLote(d, targets, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
   }
 }
 
@@ -898,7 +893,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/health') return sendJson(res, 200, { ok: true, connected });
   if (!checkAuth(req)) return sendJson(res, 401, { error: 'unauthorized' });
   if (url.pathname === '/status' && req.method === 'GET') {
-    return sendJson(res, 200, { connected, phone, qrUpdatedAt, lastError, copiadores: copiadores.length, distribuidores: distribuidores.length, fila: await filaPendente() });
+    return sendJson(res, 200, { connected, phone, qrUpdatedAt, lastError, copiadores: copiadores.length, distribuidores: distribuidores.length });
   }
   if (url.pathname === '/qr' && req.method === 'GET') {
     return sendJson(res, 200, { connected, qr: qrDataUrl, updatedAt: qrUpdatedAt });
@@ -947,7 +942,6 @@ server.listen(PORT, () => log.info({ PORT }, 'worker http no ar'));
 connect().catch((e) => log.error(String(e)));
 loadCopiadores().catch(() => {});
 setInterval(tick, 15000);
-setInterval(() => tickQueue().catch((e) => log.warn(String(e).slice(0, 150))), 10000);
 setInterval(loadCopiadores, 60000);
 setInterval(() => tickRadar().catch((e) => log.warn(String(e).slice(0, 150))), 5 * 60 * 1000);
 setTimeout(() => tickRadar().catch(() => {}), 60000);
