@@ -39,6 +39,47 @@ const GROUPS: Group[] = [
   ]},
 ];
 
+// Rótulo amigável da tela atual (breadcrumb do topo)
+const LABELS: [string, string][] = [
+  ['/dashboard/postagens/produtos', 'Gerar Postagem'],
+  ['/dashboard/postagens/copiador', 'Modo Copiador'],
+  ['/dashboard/postagens/radar', 'Radar Shopee'],
+  ['/dashboard/postagens/sorteio', 'Sorteio + Boas-vindas'],
+  ['/dashboard/postagens/envio', 'Envio automático'],
+  ['/dashboard/postagens/fila', 'Modo Fila'],
+  ['/dashboard/postagens/lista', 'Modo Lista'],
+  ['/dashboard/postagens', 'Postagens'],
+  ['/dashboard/robo', 'Config Robô'],
+  ['/dashboard/planos', 'Planos'],
+  ['/dashboard/relatorios', 'Relatórios'],
+  ['/dashboard/ferramentas', 'Ferramentas'],
+  ['/dashboard/crescimento', 'Crescimento'],
+  ['/dashboard/config/dados', 'Seus Dados'],
+  ['/dashboard/config/ajuda', 'Central de Ajuda'],
+  ['/dashboard/config/suporte-ia', 'Suporte IA'],
+  ['/dashboard/config/feedback', 'Enviar Feedback'],
+  ['/dashboard', 'Visão geral'],
+];
+
+const TABS: { href: string; label: string; icon: string }[] = [
+  { href: '/dashboard', label: 'Início', icon: '🏠' },
+  { href: '/dashboard/postagens/produtos', label: 'Criar', icon: '✏️' },
+  { href: '/dashboard/postagens/copiador', label: 'Copiador', icon: '📑' },
+];
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
+function labelFor(path: string) {
+  for (const [prefix, label] of LABELS) if (path === prefix) return label;
+  for (const [prefix, label] of LABELS) if (path.startsWith(prefix + '/')) return label;
+  return 'Painel';
+}
+
 function initials(name?: string | null, email?: string | null) {
   return (name || email || 'U').slice(0, 2).toUpperCase();
 }
@@ -50,9 +91,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [light, setLight] = useState(false);
   const [mobOpen, setMobOpen] = useState(false);
   const name = session?.user?.name || session?.user?.email?.split('@')[0] || 'Usuário';
+  const first = name.split(' ')[0];
+  const [plan, setPlan] = useState('');
   const active = (href: string) => (href === '/dashboard' ? path === href : path.startsWith(href));
 
-  // No mobile o menu fecha ao navegar
+  React.useEffect(() => {
+    fetch('/api/stats').then((r) => r.json()).then((d) => setPlan(d?.plan || '')).catch(() => {});
+  }, []);
+
   React.useEffect(() => { setMobOpen(false); }, [path]);
 
   React.useEffect(() => {
@@ -82,11 +128,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="shell">
       {mobOpen && <button className="mob-backdrop" aria-label="Fechar menu" onClick={() => setMobOpen(false)} />}
-      <div className="mobile-bar">
-        <button className="mob-menu" aria-label="Abrir menu" aria-expanded={mobOpen} onClick={() => setMobOpen(true)}>☰</button>
-        <span className="brand"><span className="brand-badge">📡</span> Cupom Radar</span>
-      </div>
-      <aside className="sidebar">
+
+      <aside className="sidebar" aria-label="Menu principal">
         <div className="brand"><span className="brand-badge">📡</span> Cupom Radar</div>
         <div className="side-user">
           <div className="avatar">{initials(session?.user?.name, session?.user?.email)}</div>
@@ -119,12 +162,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </div>
       </aside>
+
       <div className="main">
-        <div className="container" style={{ paddingTop: 24 }}>
-          {children}
-        </div>
-        <button className="help-fab">💬 Precisa de ajuda?</button>
+        <header className="topbar-app">
+          <button className="mob-menu" aria-label="Abrir menu" aria-expanded={mobOpen} onClick={() => setMobOpen(true)}>☰</button>
+          <div className="topbar-hello">
+            <small>{greeting()}, {first}</small>
+            <b>{labelFor(path)}</b>
+          </div>
+          {plan && <a className="topbar-plan" href="/dashboard/planos">💎 {plan}</a>}
+        </header>
+
+        <div className="container" style={{ paddingTop: 24 }}>{children}</div>
+
+        <nav className="tabbar" aria-label="Navegação rápida">
+          {TABS.map((t) => (
+            <a key={t.href} className={`tabitem${active(t.href) ? ' active' : ''}`} href={t.href} aria-current={active(t.href) ? 'page' : undefined}>
+              <span className="tabico">{t.icon}</span>
+              <span>{t.label}</span>
+            </a>
+          ))}
+          <button className={`tabitem${mobOpen ? ' active' : ''}`} onClick={() => setMobOpen(true)}>
+            <span className="tabico">☰</span>
+            <span>Menu</span>
+          </button>
+        </nav>
       </div>
+
+      <button className="help-fab">💬 Precisa de ajuda?</button>
     </div>
   );
 }

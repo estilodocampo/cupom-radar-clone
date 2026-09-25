@@ -135,11 +135,49 @@ body.light .btn-ghost { color: var(--text); }
 body.light .qr-box { border: 1px solid var(--border); }
 body.light .sidebar { background: #e8eef6; }
 
-/* ===== Responsivo ===== */
-.mobile-bar { display: none; }
-.mob-backdrop { display: none; }
+/* ===== Topbar (todas as telas) ===== */
+.topbar-app {
+  display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 50;
+  padding: 11px 20px; background: rgba(10,15,30,.9); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+body.light .topbar-app { background: rgba(241,245,250,.92); }
+.topbar-hello { display: flex; flex-direction: column; min-width: 0; }
+.topbar-hello small { font-size: 12px; color: var(--muted); line-height: 1.2; }
+.topbar-hello b { font-size: 16px; line-height: 1.25; }
+.topbar-plan {
+  margin-left: auto; flex-shrink: 0; background: #12294d; color: #93c5fd; border: 1px solid #274b7a;
+  border-radius: 999px; padding: 5px 13px; font-size: 12px; font-weight: 700; text-decoration: none; text-transform: capitalize;
+}
 
-@media (max-width: 860px) {
+/* ===== Barra inferior (mobile/tablet) ===== */
+.tabbar { display: none; }
+.mob-menu { display: none; }
+
+/* ===== Dashboard ===== */
+.dash-hello { margin: 4px 0 22px; }
+.dash-section { margin: 24px 0 10px; }
+.dash-eyebrow { color: var(--green); font-size: 11px; font-weight: 800; letter-spacing: 2px; }
+.dash-h2 { margin: 2px 0 0; font-size: 19px; }
+.quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.quick-card {
+  position: relative; display: block; text-decoration: none; color: inherit;
+  background: linear-gradient(180deg, var(--card2), var(--card)); border: 1px solid var(--border);
+  border-radius: 14px; padding: 16px 16px 14px; min-height: 118px;
+  transition: transform .1s, border-color .15s;
+}
+.quick-card:hover { border-color: var(--green); transform: translateY(-2px); }
+.quick-card:active { transform: scale(.99); }
+.quick-ico { width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.tone-green { background: #12332a; } .tone-blue { background: #12294d; }
+.tone-amber { background: #3a2a10; } .tone-purple { background: #2a1a3d; }
+.quick-arrow { position: absolute; top: 14px; right: 16px; color: var(--muted); font-size: 15px; }
+.quick-card h3 { margin: 12px 0 4px; font-size: 16px; }
+.quick-card p { margin: 0; color: var(--muted); font-size: 13px; }
+a.card { text-decoration: none; color: inherit; display: block; }
+
+/* ===== Responsivo ===== */
+@media (max-width: 1024px) {
   .sidebar {
     display: flex; position: fixed; inset: 0 auto 0 0; width: 250px; max-width: 84vw;
     height: 100dvh; z-index: 70; transform: translateX(-102%);
@@ -147,38 +185,54 @@ body.light .sidebar { background: #e8eef6; }
   }
   body.mob-open .sidebar { transform: translateX(0); }
   body.mob-open { overflow: hidden; }
-  .mob-backdrop { display: block; position: fixed; top: 0; bottom: 0; right: 0; left: 46px; background: rgba(0,0,0,.45); z-index: 60; border: 0; }
-  /* O conteúdo desliza junto com o drawer (evita sobreposição) */
+  .mob-backdrop { display: block; position: fixed; top: 0; bottom: 0; right: 0; left: 46px; background: rgba(0,0,0,.45); z-index: 65; border: 0; }
   .main { transform: translateX(46px); transition: transform .22s ease; }
-  .mobile-bar {
-    display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 50;
-    padding: 10px 14px; background: rgba(10,15,30,.92); backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--border);
+  .mob-menu {
+    display: flex; align-items: center; justify-content: center; background: none; border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px; width: 40px; height: 40px; font-size: 18px; cursor: pointer; flex-shrink: 0;
   }
-  body.light .mobile-bar { background: rgba(241,245,250,.94); }
-  .mob-menu { background: none; border: 1px solid var(--border); color: var(--text); border-radius: 10px; width: 40px; height: 40px; font-size: 18px; cursor: pointer; flex-shrink: 0; }
-  .mobile-bar .brand { font-size: 17px; }
-  .mobile-bar .brand-badge { width: 30px; height: 30px; font-size: 17px; border-radius: 9px; }
+  .topbar-app { padding: 10px 14px; }
+  .tabbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 55;
+    background: rgba(10,15,30,.96); backdrop-filter: blur(10px); border-top: 1px solid var(--border);
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+  }
+  body.light .tabbar { background: rgba(255,255,255,.97); }
+  body.mob-open .tabbar { display: none; }
+  .tabitem {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    background: none; border: 0; cursor: pointer; padding: 6px 2px; min-height: 52px;
+    color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: none; border-radius: 10px;
+  }
+  .tabitem .tabico { font-size: 19px; line-height: 1; }
+  .tabitem.active { color: var(--green); }
+  .container { padding: 16px 14px 92px; }
   .step { flex-direction: column; }
   .step-num { min-width: 0; }
-  .container { padding: 14px 13px 40px; }
-  .help-fab { right: 14px; bottom: 14px; padding: 11px 16px; font-size: 14px; }
+  .help-fab { bottom: 76px; right: 14px; padding: 11px 16px; font-size: 14px; }
   .orbit { display: none; }
   .modal { padding: 18px; border-radius: 14px; }
   .qr-box img { width: 190px; }
   .result { padding: 13px; font-size: 13.5px; }
-  .btn { padding: 10px 16px; }
-  .btn-sm { padding: 9px 14px; }
   .input, select.input, textarea.input { font-size: 16px; padding: 11px 12px; } /* evita zoom no iOS */
-  .tab { padding: 9px 16px; font-size: 13.5px; }
   .chan-foot button, .chan-foot a { padding: 4px 0; min-height: 34px; }
-  .grid-3, .grid-4 { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 640px) {
+  .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .quick { grid-template-columns: 1fr; }
+  .topbar-hello b { font-size: 15px; }
+  .topbar-plan { padding: 4px 11px; font-size: 11px; }
+  .btn { padding: 10px 16px; }
+  .btn-sm { padding: 9px 14px; }
+  .tab { padding: 9px 16px; font-size: 13.5px; }
+}
+
+@media (max-width: 400px) {
   .h1 { font-size: 22px; }
   .card { padding: 12px 13px; }
-  .step-cap { font-size: 11px; }
+  .quick-card { min-height: 0; padding: 14px; }
   .help-fab { font-size: 13px; padding: 10px 14px; }
+  .topbar-hello small { font-size: 11px; }
 }
 
