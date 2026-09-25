@@ -99,17 +99,27 @@ async function shopeeShortLink(originUrl, subIds, creds) {
 
 async function shortenUrl(longUrl, timeoutMs = 8000) {
   if (longUrl.length <= 60) return longUrl;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, { signal: ctrl.signal });
+    const r1 = await fetch(`https://da.gd/s/?url=${encodeURIComponent(longUrl)}`, { signal: ctrl.signal });
+    const b1 = (await r1.text()).trim();
+    if (r1.ok && /^https?:\/\/da\.gd\/[A-Za-z0-9]+$/.test(b1)) return b1;
+  } catch { /* tenta próximo */ }
+  try {
+    const r2 = await fetch('https://cleanuri.com/api/v1/shorten', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: longUrl }),
+      signal: ctrl.signal,
+    });
+    const b2 = await r2.json().catch(() => ({}));
+    if (r2.ok && b2.result_url && /^https?:\/\//.test(b2.result_url)) return b2.result_url;
+  } catch { /* mantém original */ }
+  finally {
     clearTimeout(t);
-    const short = (await res.text()).trim();
-    if (res.ok && /^https?:\/\/is\.gd\/[A-Za-z0-9]+$/.test(short)) return short;
-    return longUrl;
-  } catch {
-    return longUrl;
   }
+  return longUrl;
 }
 
 async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool) {
