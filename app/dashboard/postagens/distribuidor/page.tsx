@@ -35,6 +35,7 @@ export default function Distribuidor() {
   const [minInterval, setMinInterval] = useState(0);
   const [maxPerDay, setMaxPerDay] = useState(0);
   const [dedupHoras, setDedupHoras] = useState(24);
+  const [pausado, setPausado] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [msg, setMsg] = useState('');
   const [fila, setFila] = useState(0);
@@ -59,6 +60,7 @@ export default function Distribuidor() {
       setMinInterval(Number(c.minInterval) || 0);
       setMaxPerDay(Number(c.maxPerDay) || 0);
       setDedupHoras(Number.isFinite(Number(c.dedupHoras)) ? Number(c.dedupHoras) : 24);
+      setPausado(!!c.pausado);
       setPicked(saved.filter((t) => gl.some((x) => x.id === t)));
       setExtra(saved.filter((t) => !gl.some((x) => x.id === t)).join('\n'));
     }).catch(() => {});
@@ -76,15 +78,26 @@ export default function Distribuidor() {
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   }
 
+  function targetsAtuais() {
+    const manual = extra.split('\n').map((x) => x.trim()).filter(Boolean);
+    return [...new Set([...picked, ...manual])].filter((t) => t !== hub);
+  }
+
+  function configAtual(over: Record<string, unknown> = {}) {
+    return {
+      hub, targets: targetsAtuais(), onlyMine, requireLink, convert, stripCoupons,
+      prefix, suffix, minInterval, maxPerDay, dedupHoras, pausado, ...over,
+    };
+  }
+
   async function save() {
     if (!hub) { setMsg('❌ Selecione o SEU grupo (o hub).'); return; }
-    const manual = extra.split('\n').map((x) => x.trim()).filter(Boolean);
-    const all = [...new Set([...picked, ...manual])].filter((t) => t !== hub);
+    const all = targetsAtuais();
     if (!all.length) { setMsg('❌ Selecione ao menos um grupo para receber.'); return; }
     const res = await fetch('/api/integrations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'distribuidor', config: { hub, targets: all, onlyMine, requireLink, convert, stripCoupons, prefix, suffix, minInterval, maxPerDay, dedupHoras } }),
+      body: JSON.stringify({ provider: 'distribuidor', config: configAtual() }),
     });
     const d = await res.json().catch(() => ({}));
     setMsg(res.ok ? '✅ Distribuidor salvo! Tudo que você postar no seu grupo será repassado.' : `❌ ${d.error || 'Falha ao salvar'}`);
@@ -96,7 +109,7 @@ export default function Distribuidor() {
       <div className="eyebrow">● DISTRIBUIDOR</div>
       <h1 className="h1">Distribuidor</h1>
       <p className="sub">
-        Fonte → seu grupo → outros grupos. <span className="badge badge-ok">NOVO</span>
+        Fonte → seu grupo → outros grupos. {pausado ? <span className="badge badge-err">PAUSADO</span> : <span className="badge badge-ok">ATIVO</span>}
       </p>
       {msg && <p>{msg}</p>}
 
@@ -166,6 +179,19 @@ export default function Distribuidor() {
         <input className="input" value={suffix} onChange={(e) => setSuffix(e.target.value)} placeholder="Compre pelo link e receba comissão" />
 
         <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={save}>Salvar distribuidor</button>
+        <button
+          className="btn btn-sm"
+          style={{ marginTop: 12, marginLeft: 8, background: pausado ? '#1d4ed8' : '#c0362c', color: '#fff' }}
+          onClick={async () => {
+            const next = !pausado;
+            if (!next && !confirm('Pausar agora? Nenhuma oferta será repassada até você retomar.')) return;
+            setPausado(next);
+            await fetch('/api/integrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'distribuidor', config: configAtual({ pausado: next }) }) });
+            setMsg(next ? '⏸️ Distribuidor PAUSADO. Nada será repostado.' : '▶️ Distribuidor retomado.');
+          }}
+        >
+          {pausado ? '▶️ Retomar repasse' : '⏸️ Pausar repasse agora'}
+        </button>
         <p className="hint" style={{ marginTop: 8 }}>
           Trava anti-loop ativa: nunca repassa a partir de um grupo que já recebe, e nunca devolve ao seu hub. O worker aplica em até 60s.
         </p>

@@ -304,12 +304,12 @@ async function loadCopiadores() {
     }
     // Distribuidor primeiro: o Copiador entrega no hub definido lá
     distribuidores = Object.entries(byUser)
-      .filter(([, v]) => v.distribuidor && v.distribuidor.hub && (v.distribuidor.targets || []).length)
-      .map(([userId, v]) => {
+      .filter(([, v]) => v.distribuidor && v.distribuidor.hub && (v.distribuidor.targets || []).length)      .map(([userId, v]) => {
         const c = v.distribuidor;
         return {
           userId, kind: 'distribuidor', hub: c.hub, targets: c.targets || [],
           onlyMine: !!c.onlyMine, requireLink: !!c.requireLink, convert: c.convert !== false,
+          pausado: !!c.pausado,
           stripCoupons: c.stripCoupons !== false,
           dedupHoras: Number.isFinite(Number(c.dedupHoras)) ? Number(c.dedupHoras) : 24,
           prefix: String(c.prefix || '').slice(0, 300), suffix: String(c.suffix || '').slice(0, 300),
@@ -408,6 +408,41 @@ function ofertaFp(c, text) {
   return crypto.createHash('sha1').update(`${c.kind || 'copiador'}|${text}`).digest('hex').slice(0, 16);
 }
 
+// Cache em memória: evita ida ao banco e fecha a janela de corrida da duplicata
+const dedupCache = new Map(); // key -> timestamp
+function dedupKey(c, targetJid, text) {
+  return `${c.userId}|${c.kind || 'copiador'}|${ofertaFp(c, text)}|${targetJid}`;
+}
+function cacheBloqueia(c, targetJid, text) {
+  if (!(c.dedupHoras > 0)) return false;
+  const k = dedupKey(c, targetJid, text);
+  const at = dedupCache.get(k);
+  if (at && Date.now() - at < c.dedupHoras * 3600000) return true;
+  if (dedupCache.size > 20000) dedupCache.clear();
+  return false;
+}
+function marcarCache(c, targetJid, text) {
+  if (!(c.dedupHoras > 0)) return;
+  dedupCache.set(dedupKey(c, targetJid, text), Date.now());
+}
+
+// Reserva a oferta ANTES de enviar: o índice único garante que uma segunda
+// ocorrência da mesma mensagem não seja reservada (e portanto não seja enviada).
+// Retorna a lista de destinos realmente reservados.
+async function reservarDestinos(c, targets, text, mediaBuf, mediaType) {
+  const ok = [];
+  for (const t of targets) {
+    if (cacheBloqueia(c, t, text)) continue;
+    if (await jaProcessou(c, t, text)) { marcarCache(c, t, text); continue; }
+    if (await registrarOferta(c, t, text, 'sending', mediaBuf, mediaType)) {
+      marcarCache(c, t, text);
+      ok.push(t);
+    }
+    // registrarOferta devolve false = já existia registro = duplicata
+  }
+  return ok;
+}
+
 // O mesmo texto já foi enviado/enfileirado para este destino dentro da janela?
 async function jaProcessou(c, targetJid, text) {
   if (!pool || !(c.dedupHoras > 0)) return false;
@@ -432,32 +467,26 @@ async function enfileirar(c, targetJid, text, mediaBuf, mediaType) {
 }
 
 // Envia um mesmo texto para VÁRIOS grupos contando 1 única janela de frequência.
-// (Bug anterior: a janela era consumida a cada grupo, deixando o repasse 13x mais lento.)
+// Reserva antes de enviar (anti-duplicata atômico) e só envia o que reservou.
 async function enviarOuEnfileirarLote(c, targets, text, mediaBuf, mediaType) {
   if (!targets.length) return false;
-  // Trava anti-repetição: nunca manda o mesmo texto 2x no mesmo grupo dentro da janela
-  let elegiveis = targets;
-  if (c.dedupHoras > 0) {
-    elegiveis = [];
-    for (const t of targets) {
-      if (await jaProcessou(c, t, text)) {
-        log.info({ kind: c.kind, to: t }, 'oferta repetida ignorada (anti-duplicata)');
-      } else elegiveis.push(t);
-    }
-  }
-  if (!elegiveis.length) return false;
   const grande = !!(mediaBuf && mediaBuf.length >= MEDIA_MAX_B64);
   // Mídia grande demais não cabe na fila: entra na hora, ignorando o intervalo
   if (!grande && !(await passaLimites(c))) {
-    for (const t of elegiveis) await enfileirar(c, t, text, mediaBuf, mediaType);
+    for (const t of targets) await enfileirar(c, t, text, mediaBuf, mediaType);
+    return false;
+  }
+  const reservados = await reservarDestinos(c, targets, text, mediaBuf, mediaType);
+  if (!reservados.length) {
+    log.info({ kind: c.kind }, 'nada novo para enviar (anti-duplicata)');
     return false;
   }
   let ok = 0;
-  for (const t of elegiveis) {
+  for (const t of reservados) {
     try {
       await sendComMidia(t, text, mediaBuf, mediaType);
+      await pool.query('UPDATE "QueuedOffer" SET status = $1, "sentAt" = NOW() WHERE "userId" = $2 AND kind = $3 AND fp = $4 AND "targetJid" = $5', ['sent', c.userId, c.kind || 'copiador', ofertaFp(c, text), t]).catch(() => {});
       ok++;
-      await registrarOferta(c, t, text, 'sent', mediaBuf, mediaType);
     } catch (e) {
       log.warn({ e: String(e).slice(0, 200), to: t }, 'envio falhou');
     }
@@ -545,6 +574,7 @@ async function tickQueue() {
       else await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = $3', ['canceled', 'destino removido', i.id]).catch(() => {});
     }
     if (!validos.length) continue;
+    if (cfg.pausado) break; // pausado: espera o usuário retomar
     if (!(await passaLimites(cfg))) break; // espera a próxima janela
     let ok = 0;
     for (const i of validos) {
@@ -581,6 +611,7 @@ async function handleDistribuidor(msg) {
   const ts = Number(msg.messageTimestamp) * 1000;
   if (ts < bootTime) return;
   for (const d of distribuidores) {
+    if (d.pausado) continue; // pausa de emergência
     if (d.hub !== remote) continue;
     if (d.onlyMine && !msg.key.fromMe) continue;
     const text = extractText(msg);
