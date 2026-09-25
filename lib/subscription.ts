@@ -1,7 +1,16 @@
 import { prisma } from './prisma';
 import { PLANS, PlanId } from './plans';
 
+function adminEmails(): string[] {
+  return (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.toLowerCase().trim())
+    .filter(Boolean);
+}
+
 export async function getUserPlan(userId: string): Promise<PlanId> {
+  const user = await prisma.user.findUnique({ where: { id: userId } }).catch(() => null);
+  if (user?.email && adminEmails().includes(user.email.toLowerCase().trim())) return 'master';
   const sub = await prisma.subscription.findUnique({ where: { userId } }).catch(() => null);
   const plan = (sub?.plan as PlanId) || 'gratuito';
   if (sub?.status !== 'active' && sub) return 'gratuito';
