@@ -1,5 +1,6 @@
 const MODES = [
   { href: '/dashboard/postagens/produtos', icon: '📦', name: 'Produtos', desc: 'Gere ofertas a partir do link, com seu ID de afiliado.' },
+  { href: '/dashboard/postagens/envio', icon: '🚀', name: 'Envio automático', desc: 'Grupo padrão, teste e vínculo do WhatsApp.' },
   { href: '/dashboard/postagens/fila', icon: '📋', name: 'Modo Fila', desc: 'Ofertas enviadas em sequência, no piloto automático.' },
   { href: '/dashboard/postagens/lista', icon: '📝', name: 'Modo Lista', desc: 'Listas fixas de grupos para disparo rápido.', badge: 'NOVO' },
   { href: '/dashboard/postagens/copiador', icon: '📑', name: 'Modo Copiador', desc: 'Replique ofertas convertendo para o seu link.' },

@@ -19,6 +19,7 @@ export const worker = {
   groups: () => call('/groups') as Promise<{ groups: { id: string; name: string }[] }>,
   send: (to: string, text: string) =>
     call('/send', { method: 'POST', body: JSON.stringify({ to, text }) }),
+  logout: () => call('/logout', { method: 'POST', body: '{}' }),
 };
 
 export function workerConfigured() {

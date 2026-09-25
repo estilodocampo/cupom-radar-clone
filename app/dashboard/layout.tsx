@@ -15,6 +15,7 @@ const TOP: Item[] = [
 const GROUPS: Group[] = [
   { label: 'Postagens', icon: '✉️', items: [
     { href: '/dashboard/postagens/produtos', label: '📦 Produtos' },
+    { href: '/dashboard/postagens/envio', label: '🚀 Envio automático' },
     { href: '/dashboard/postagens/fila', label: '📋 Modo Fila' },
     { href: '/dashboard/postagens/lista', label: '📝 Modo Lista', badge: 'NOVO' },
     { href: '/dashboard/postagens/copiador', label: '📑 Modo Copiador' },

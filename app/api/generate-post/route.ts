@@ -62,5 +62,20 @@ export async function POST(req: NextRequest) {
     text = buildPost(store, { title, priceFrom, priceTo, link: affLink, coupon: finalCoupon });
   }
   if (hook) text = `${hook}\n\n${text}`;
-  return NextResponse.json({ store, affiliateLink: affLink, text });
+  let autoSent = false;
+  if (userId) {
+    const envio = await prisma.integration.findUnique({ where: { userId_provider: { userId, provider: 'envio_auto' } } }).catch(() => null);
+    const ecfg = envio?.config as { groupJid?: string; autoNovo?: boolean } | null;
+    if (ecfg?.autoNovo && ecfg.groupJid) {
+      try {
+        const { worker } = await import('../../../lib/worker');
+        await worker.send(ecfg.groupJid, text);
+        await prisma.dispatchLog.create({ data: { userId, groupJid: ecfg.groupJid, message: text, status: 'sent' } }).catch(() => null);
+        autoSent = true;
+      } catch {
+        // sem conexão: mantém só o texto gerado
+      }
+    }
+  }
+  return NextResponse.json({ store, affiliateLink: affLink, text, autoSent });
 }

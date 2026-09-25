@@ -138,6 +138,16 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 502, { error: String(e).slice(0, 300) });
     }
   }
+  if (url.pathname === '/logout' && req.method === 'POST') {
+    try { await sock?.logout().catch(() => {}); } catch { /* ignore */ }
+    sock = null;
+    connected = false;
+    phone = null;
+    qrDataUrl = null;
+    fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+    setTimeout(connect, 2000);
+    return sendJson(res, 200, { ok: true });
+  }
   return sendJson(res, 404, { error: 'not found' });
 });
 
