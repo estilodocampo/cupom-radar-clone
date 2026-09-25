@@ -434,6 +434,91 @@ async function tick() {
   }
 }
 
+// ---- Radar Shopee: importação automática por palavras-chave ----
+function buildShopeePost({ title, priceFrom, priceTo, link, coupon }) {
+  return `🔥 OFERTA SHOPEE 🔥\n\n📌 ${title}\n${priceFrom ? `❌ De: ${priceFrom}\n` : ''}✅ Por: ${priceTo}\n${coupon ? `🎟️ Cupom: ${coupon}\n` : ''}\n👉 ${link}\n\n⚠️ Estoque limitado!`;
+}
+
+let radarDiscoveryWarnedAt = 0;
+
+// Descoberta de produtos na API de afiliados Shopee.
+// PENDENTE: confirmar as queries de busca após introspecção do schema com as
+// credenciais do usuário (App ID + Secret). Interface de retorno:
+// [{ key, url, title, priceFrom?, priceTo }] — preços já formatados ("R$ 49,90").
+async function discoverShopeeProducts(keywords, creds) {
+  void keywords; void creds;
+  if (Date.now() - radarDiscoveryWarnedAt > 6 * 3600 * 1000) {
+    radarDiscoveryWarnedAt = Date.now();
+    log.warn('radar: descoberta Shopee pendente de introspecção da API (aguardando credenciais)');
+  }
+  return [];
+}
+
+async function tickRadar() {
+  if (!pool || !connected) return;
+  let radars = [];
+  try {
+    const r = await pool.query(
+      `SELECT id, "userId", name, keywords, "targetGroups", "intervalMinutes", "maxPostsPerRun"
+       FROM "RadarConfig" WHERE active = true
+       AND ("lastRunAt" IS NULL OR "lastRunAt" <= NOW() - ("intervalMinutes" || ' minutes')::INTERVAL)
+       ORDER BY "lastRunAt" NULLS FIRST LIMIT 5`
+    );
+    radars = r.rows;
+  } catch (e) {
+    log.warn({ e: String(e) }, 'poll radar falhou');
+    return;
+  }
+  if (!radars.length) return;
+  let credsByUser = {};
+  try {
+    const c = await pool.query('SELECT "userId", config FROM "Integration" WHERE provider = $1', ['shopee_api']);
+    for (const row of c.rows) {
+      if (row.config && row.config.appId && row.config.secret) credsByUser[row.userId] = { appId: row.config.appId, secret: row.config.secret };
+    }
+  } catch { /* segue sem credenciais */ }
+  for (const radar of radars) {
+    const done = async () => {
+      await pool.query('UPDATE "RadarConfig" SET "lastRunAt" = NOW() WHERE id = $1', [radar.id]).catch(() => {});
+    };
+    const creds = credsByUser[radar.userId];
+    if (!creds) {
+      log.warn({ radar: radar.name }, 'radar sem credenciais Shopee, pulando rodada');
+      await done();
+      continue;
+    }
+    try {
+      const found = await discoverShopeeProducts(radar.keywords || [], creds);
+      const fresh = [];
+      for (const item of found.slice(0, radar.maxPostsPerRun * 3)) {
+        if (!item || !item.url || !item.title || !item.priceTo) continue;
+        const ex = await pool.query('SELECT 1 FROM "RadarPost" WHERE "radarId" = $1 AND "itemKey" = $2 LIMIT 1', [radar.id, item.key || item.url]).catch(() => ({ rows: [] }));
+        if (ex.rows && ex.rows.length) continue;
+        fresh.push(item);
+        if (fresh.length >= radar.maxPostsPerRun) break;
+      }
+      for (const item of fresh) {
+        const short = await shopeeShortLink(item.url.split('?')[0], ['cupomradar'], creds);
+        const text = buildShopeePost({ title: item.title, priceFrom: item.priceFrom, priceTo: item.priceTo, link: short });
+        for (const t of radar.targetGroups || []) {
+          try {
+            await sock.sendMessage(t, { text });
+            await new Promise((rr) => setTimeout(rr, 1500));
+            await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status) VALUES (gen_random_uuid(), $1, $2, $3, $4)', [radar.userId, t, text, 'sent']).catch(() => {});
+          } catch (e) {
+            log.warn({ e: String(e).slice(0, 200) }, 'radar envio falhou');
+          }
+        }
+        await pool.query('INSERT INTO "RadarPost" (id, "radarId", "itemKey") VALUES (gen_random_uuid(), $1, $2) ON CONFLICT ("radarId", "itemKey") DO NOTHING', [radar.id, item.key || item.url]).catch(() => {});
+      }
+      await done();
+      log.info({ radar: radar.name, enviados: fresh.length }, 'radar rodada concluída');
+    } catch (e) {
+      log.warn({ e: String(e).slice(0, 200), radar: radar.name }, 'radar rodada falhou');
+    }
+  }
+}
+
 function readBody(req) {
   return new Promise((resolve) => {
     let b = '';
@@ -484,3 +569,5 @@ connect().catch((e) => log.error(String(e)));
 loadCopiadores().catch(() => {});
 setInterval(tick, 15000);
 setInterval(loadCopiadores, 60000);
+setInterval(() => tickRadar().catch((e) => log.warn(String(e).slice(0, 150))), 5 * 60 * 1000);
+setTimeout(() => tickRadar().catch(() => {}), 60000);

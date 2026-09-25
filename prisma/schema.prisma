@@ -24,6 +24,7 @@ model User {
   dispatches    DispatchLog[]
   integrations  Integration[]
   feedbacks     Feedback[]
+  radars        RadarConfig[]
   createdAt     DateTime  @default(now())
 }
 
@@ -143,4 +144,33 @@ model ShortLink {
   createdAt DateTime @default(now())
 
   @@index([userId, url])
+}
+
+// Radar Shopee: importação automática por palavras-chave/categorias
+model RadarConfig {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String    @default("Meu radar")
+  keywords        String[]  @default([])
+  targetGroups    String[]  @default([])
+  intervalMinutes Int       @default(120)
+  maxPostsPerRun  Int       @default(3)
+  active          Boolean   @default(true)
+  lastRunAt       DateTime?
+  createdAt       DateTime  @default(now())
+  posts           RadarPost[]
+
+  @@index([userId])
+}
+
+model RadarPost {
+  id      String      @id @default(cuid())
+  radarId String
+  radar   RadarConfig @relation(fields: [radarId], references: [id], onDelete: Cascade)
+  itemKey String
+  sentAt  DateTime    @default(now())
+
+  @@unique([radarId, itemKey])
+  @@index([radarId])
 }

@@ -4,6 +4,7 @@ const MODES = [
   { href: '/dashboard/postagens/fila', icon: '📋', name: 'Modo Fila', desc: 'Ofertas enviadas em sequência, no piloto automático.' },
   { href: '/dashboard/postagens/lista', icon: '📝', name: 'Modo Lista', desc: 'Listas fixas de grupos para disparo rápido.', badge: 'NOVO' },
   { href: '/dashboard/postagens/copiador', icon: '📑', name: 'Modo Copiador', desc: 'Replique ofertas convertendo para o seu link.' },
+  { href: '/dashboard/postagens/radar', icon: '📡', name: 'Radar Shopee', desc: 'Importe ofertas por palavra-chave no automático.', badge: 'NOVO' },
 ];
 
 export default function PostagensHub() {
