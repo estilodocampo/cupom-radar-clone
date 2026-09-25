@@ -32,6 +32,7 @@ let lastError = null;
 const bootTime = Date.now();
 const seenIds = new Set();
 let copiadores = []; // [{userId, source, targets, affIds}]
+let boasvindasCfgs = []; // [{userId, targets, text}]
 
 // ---- Conversão de links (espelho de lib/shopee-parser) ----
 function detectStore(url) {
@@ -284,11 +285,12 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
 async function loadCopiadores() {
   if (!pool) return;
   try {
-    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8,$9)', ['copiador', 'shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'lista_envio', 'shopee_api']);
+    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', ['copiador', 'shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'lista_envio', 'shopee_api', 'boasvindas']);
     const byUser = {};
     for (const r of rows) {
       byUser[r.userId] = byUser[r.userId] || { affIds: {} };
-      if (r.provider === 'copiador') byUser[r.userId].copiador = r.config || {};
+      if (r.provider === 'boasvindas') byUser[r.userId].boasvindas = r.config || {};
+      else if (r.provider === 'copiador') byUser[r.userId].copiador = r.config || {};
       else if (r.provider === 'shopee_api' && r.config && r.config.appId && r.config.secret) byUser[r.userId].shopeeCreds = { appId: r.config.appId, secret: r.config.secret };
       else if (r.provider === 'mercadolivre' && r.config) {
         if (r.config.mattTool) byUser[r.userId].mlMattTool = r.config.mattTool;
@@ -300,6 +302,9 @@ async function loadCopiadores() {
       .filter(([, v]) => v.copiador && v.copiador.source)
       .map(([userId, v]) => ({ userId, source: v.copiador.source, targets: v.copiador.targets || [], keepCoupons: !!v.copiador.keepCoupons, affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null }));
     if (copiadores.length) log.info({ n: copiadores.length }, 'copiadores ativos');
+    boasvindasCfgs = Object.entries(byUser)
+      .filter(([, v]) => v.boasvindas && (v.boasvindas.targets || []).length && v.boasvindas.text)
+      .map(([userId, v]) => ({ userId, targets: v.boasvindas.targets || [], text: String(v.boasvindas.text).slice(0, 500) }));
   } catch (e) {
     log.warn({ e: String(e) }, 'load copiadores falhou');
   }
@@ -374,6 +379,24 @@ async function connect() {
   sock.ev.on('messages.upsert', async ({ messages }) => {
     for (const m of messages || []) {
       try { await handleCopiador(m); } catch (e) { log.warn(String(e).slice(0, 200)); }
+    }
+  });
+  sock.ev.on('group-participants.update', async ({ id, participants, action }) => {
+    try {
+      if (action !== 'add' || !id.endsWith('@g.us')) return;
+      for (const b of boasvindasCfgs) {
+        if (!b.targets.includes(id) || !b.text) continue;
+        for (const p of participants || []) {
+          try {
+            await sock.sendMessage(id, { text: b.text, mentions: [p] });
+            await new Promise((r) => setTimeout(r, 1500));
+          } catch (e) {
+            log.warn({ e: String(e).slice(0, 200) }, 'boasvindas envio falhou');
+          }
+        }
+      }
+    } catch (e) {
+      log.warn(String(e).slice(0, 200));
     }
   });
   sock.ev.on('connection.update', async (u) => {
@@ -542,6 +565,18 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/groups' && req.method === 'GET') {
     const groups = await listGroups().catch(() => []);
     return sendJson(res, 200, { groups });
+  }
+  if (url.pathname === '/participants' && req.method === 'GET') {
+    const groupJid = url.searchParams.get('groupJid') || '';
+    if (!groupJid.endsWith('@g.us')) return sendJson(res, 400, { error: 'groupJid inválido' });
+    try {
+      if (!sock || !connected) return sendJson(res, 502, { error: 'whatsapp desconectado' });
+      const meta = await sock.groupMetadata(groupJid);
+      const participants = (meta.participants || []).map((p) => ({ id: p.id, admin: p.admin || null }));
+      return sendJson(res, 200, { participants });
+    } catch (e) {
+      return sendJson(res, 502, { error: String(e).slice(0, 200) });
+    }
   }
   if (url.pathname === '/send' && req.method === 'POST') {
     const body = JSON.parse((await readBody(req)) || '{}');

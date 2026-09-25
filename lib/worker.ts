@@ -17,6 +17,8 @@ export const worker = {
   status: () => call('/status'),
   qr: () => call('/qr'),
   groups: () => call('/groups') as Promise<{ groups: { id: string; name: string }[] }>,
+  participants: (groupJid: string) =>
+    call(`/participants?groupJid=${encodeURIComponent(groupJid)}`) as Promise<{ participants: { id: string; admin: string | null }[] }>,
   send: (to: string, text: string) =>
     call('/send', { method: 'POST', body: JSON.stringify({ to, text }) }),
   logout: () => call('/logout', { method: 'POST', body: '{}' }),

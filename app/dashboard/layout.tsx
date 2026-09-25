@@ -20,6 +20,7 @@ const GROUPS: Group[] = [
     { href: '/dashboard/postagens/lista', label: '📝 Modo Lista', badge: 'NOVO' },
     { href: '/dashboard/postagens/copiador', label: '📑 Modo Copiador' },
     { href: '/dashboard/postagens/radar', label: '📡 Radar Shopee', badge: 'NOVO' },
+    { href: '/dashboard/postagens/sorteio', label: '🎉 Sorteio + Boas-vindas', badge: 'NOVO' },
   ]},
   { label: 'Ferramentas', icon: '🛠️', items: [
     { href: '/dashboard/ferramentas', label: '🔗 Bio Link Pro' },
