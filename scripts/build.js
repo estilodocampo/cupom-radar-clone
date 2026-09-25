@@ -10,5 +10,6 @@ function run(cmd, allowFail = false) {
 }
 
 run('prisma generate');
-run('prisma migrate deploy', true);
+// Schema aplicado manualmente via `prisma db push` (banco Railway já sincronizado).
+// Ao alterar o schema: rode `prisma db push` local com a DATABASE_URL pública e faça deploy.
 run('next build');
