@@ -19,7 +19,14 @@ export async function expandUrl(url: string, timeoutMs = 8000): Promise<string> 
     if (!SHORT_HOSTS.includes(host)) return url;
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(url, { redirect: 'follow', signal: ctrl.signal });
+    const res = await fetch(url, {
+      redirect: 'follow',
+      signal: ctrl.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+      },
+    });
     clearTimeout(t);
     if (res.url && res.url !== url) return res.url;
     const loc = res.headers.get('location');
