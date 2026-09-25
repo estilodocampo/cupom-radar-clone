@@ -134,4 +134,49 @@ body.light { --bg: #f1f5fa; --bg2: #ffffff; --card: #ffffff; --card2: #f8fafc; -
 body.light .btn-ghost { color: var(--text); }
 body.light .qr-box { border: 1px solid var(--border); }
 body.light .sidebar { background: #e8eef6; }
-@media (max-width: 860px) { .sidebar { display: none; } .step { flex-direction: column; } }
+
+/* ===== Responsivo ===== */
+.mobile-bar { display: none; }
+.mob-backdrop { display: none; }
+
+@media (max-width: 860px) {
+  .sidebar {
+    display: flex; position: fixed; inset: 0 auto 0 0; width: 250px; max-width: 84vw;
+    height: 100dvh; z-index: 70; transform: translateX(-102%);
+    transition: transform .22s ease; box-shadow: 0 0 40px rgba(0,0,0,.5);
+  }
+  body.mob-open .sidebar { transform: translateX(0); }
+  body.mob-open { overflow: hidden; }
+  .mob-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 60; border: 0; }
+  .mobile-bar {
+    display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 50;
+    padding: 10px 14px; background: rgba(10,15,30,.92); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+  body.light .mobile-bar { background: rgba(241,245,250,.94); }
+  .mob-menu { background: none; border: 1px solid var(--border); color: var(--text); border-radius: 10px; width: 40px; height: 40px; font-size: 18px; cursor: pointer; flex-shrink: 0; }
+  .mobile-bar .brand { font-size: 17px; }
+  .mobile-bar .brand-badge { width: 30px; height: 30px; font-size: 17px; border-radius: 9px; }
+  .step { flex-direction: column; }
+  .step-num { min-width: 0; }
+  .container { padding: 14px 13px 40px; }
+  .help-fab { right: 14px; bottom: 14px; padding: 11px 16px; font-size: 14px; }
+  .orbit { display: none; }
+  .modal { padding: 18px; border-radius: 14px; }
+  .qr-box img { width: 190px; }
+  .result { padding: 13px; font-size: 13.5px; }
+  .btn { padding: 10px 16px; }
+  .btn-sm { padding: 9px 14px; }
+  .input, select.input, textarea.input { font-size: 16px; padding: 11px 12px; } /* evita zoom no iOS */
+  .tab { padding: 9px 16px; font-size: 13.5px; }
+  .chan-foot button, .chan-foot a { padding: 4px 0; min-height: 34px; }
+  .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 420px) {
+  .h1 { font-size: 22px; }
+  .card { padding: 12px 13px; }
+  .step-cap { font-size: 11px; }
+  .help-fab { font-size: 13px; padding: 10px 14px; }
+}
+

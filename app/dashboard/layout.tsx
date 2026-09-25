@@ -48,8 +48,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const path = usePathname();
   const [open, setOpen] = useState<Record<string, boolean>>({ Postagens: true, Configurações: true });
   const [light, setLight] = useState(false);
+  const [mobOpen, setMobOpen] = useState(false);
   const name = session?.user?.name || session?.user?.email?.split('@')[0] || 'Usuário';
   const active = (href: string) => (href === '/dashboard' ? path === href : path.startsWith(href));
+
+  // No mobile o menu fecha ao navegar
+  React.useEffect(() => { setMobOpen(false); }, [path]);
+
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  React.useEffect(() => {
+    document.body.classList.toggle('mob-open', mobOpen);
+    return () => document.body.classList.remove('mob-open');
+  }, [mobOpen]);
 
   function toggleTheme() {
     const next = !light;
@@ -66,6 +81,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="shell">
+      {mobOpen && <button className="mob-backdrop" aria-label="Fechar menu" onClick={() => setMobOpen(false)} />}
+      <div className="mobile-bar">
+        <button className="mob-menu" aria-label="Abrir menu" aria-expanded={mobOpen} onClick={() => setMobOpen(true)}>☰</button>
+        <span className="brand"><span className="brand-badge">📡</span> Cupom Radar</span>
+      </div>
       <aside className="sidebar">
         <div className="brand"><span className="brand-badge">📡</span> Cupom Radar</div>
         <div className="side-user">
