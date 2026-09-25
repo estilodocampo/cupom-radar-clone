@@ -498,7 +498,7 @@ async function groupsInUse() {
       if (r.provider === 'copiador') out.push(...(c.targets || []));
       else if (r.provider === 'envio_auto' && c.groupJid) out.push(c.groupJid);
       else if (r.provider === 'boasvindas') out.push(...(c.targets || []));
-      else if (r.provider === 'lista_envio') out.push(...((c.groups || []).map((g: { id?: string }) => g.id).filter(Boolean)));
+      else if (r.provider === 'lista_envio') out.push(...((c.groups || []).map((g) => g.id).filter(Boolean)));
     }
   } catch { /* ignora */ }
   return [...new Set(out)];
