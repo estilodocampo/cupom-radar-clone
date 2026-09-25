@@ -15,6 +15,13 @@ export default function Robo() {
   const [forms, setForms] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<string | null>(null);
   const [tg, setTg] = useState('');
+  const [tplStore, setTplStore] = useState('shopee');
+  const [tplText, setTplText] = useState('');
+  const [tplMap, setTplMap] = useState<Record<string, string>>({});
+  const [cpStore, setCpStore] = useState('shopee');
+  const [cpText, setCpText] = useState('');
+  const [cpMap, setCpMap] = useState<Record<string, string>>({});
+  const [hooks, setHooks] = useState('');
 
   async function load() {
     const s = await fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null);
@@ -27,6 +34,9 @@ export default function Robo() {
     const map: Record<string, string> = {};
     for (const it of integ?.items || []) {
       if (it.provider === 'telegram') setTg((it.config?.botToken as string) || '');
+      else if (it.provider === 'templates') { const m = (it.config || {}) as Record<string, string>; setTplMap(m); setTplText(m[tplStore] || ''); }
+      else if (it.provider === 'cupons') { const m = (it.config || {}) as Record<string, string>; setCpMap(m); setCpText(m[cpStore] || ''); }
+      else if (it.provider === 'ganchos') setHooks(((it.config?.items as string[]) || []).join('\n'));
       else map[it.provider] = (it.config?.affiliateId as string) || '';
     }
     setForms(map);
@@ -34,10 +44,22 @@ export default function Robo() {
 
   useEffect(() => { load(); }, []);
 
-  async function save(provider: string, config: Record<string, string>) {
+  async function save(provider: string, config: Record<string, unknown>) {
     await fetch('/api/integrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, config }) });
     setSaved(provider);
     setTimeout(() => setSaved(null), 2500);
+  }
+
+  async function saveTpl() {
+    const m = { ...tplMap, [tplStore]: tplText };
+    setTplMap(m);
+    await save('templates', m);
+  }
+
+  async function saveCp() {
+    const m = { ...cpMap, [cpStore]: cpText };
+    setCpMap(m);
+    await save('cupons', m);
   }
 
   return (
@@ -81,6 +103,53 @@ export default function Robo() {
           ))}
         </div>
       </div>
+
+      <div className="step">
+        <div className="step-num">03<b>Do seu jeito</b><span className="hint">Os detalhes que tornam cada postagem sua.</span></div>
+        <div className="step-cards">
+          <div className="chan">
+            <div className="chan-top"><span className="chan-ico" style={{ background: '#12294d' }}>💬</span></div>
+            <h3>Mensagens personalizadas</h3>
+            <p>Defina o formato e o tom das suas postagens. Use {'{titulo} {preco} {link} {cupom}'}.</p>
+            <select className="input" value={tplStore} onChange={(e) => { setTplStore(e.target.value); setTplText(tplMap[e.target.value] || ''); }}>
+              {STORES.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <textarea className="input" rows={3} value={tplText} onChange={(e) => setTplText(e.target.value)} placeholder={'🔥 {titulo}\n✅ Por: {preco}\n👉 {link}'} />
+            <div className="chan-foot"><button onClick={() => saveTpl()}>{saved === 'templates' ? 'Salvo ✓' : 'Salvar modelo'}</button><span>›</span></div>
+          </div>
+          <div className="chan">
+            <div className="chan-top"><span className="chan-ico" style={{ background: '#12332a' }}>🎟️</span></div>
+            <h3>Cupons</h3>
+            <p>Adicione os cupons de cada loja às suas ofertas.</p>
+            <select className="input" value={cpStore} onChange={(e) => { setCpStore(e.target.value); setCpText(cpMap[e.target.value] || ''); }}>
+              {STORES.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <input className="input" value={cpText} onChange={(e) => setCpText(e.target.value)} placeholder="Ex: ACHADINHO10" />
+            <div className="chan-foot"><button onClick={() => saveCp()}>{saved === 'cupons' ? 'Salvo ✓' : 'Salvar cupom'}</button><span>›</span></div>
+          </div>
+          <div className="chan">
+            <div className="chan-top"><span className="chan-ico" style={{ background: '#3a2a10' }}>📢</span></div>
+            <h3>Ganchos personalizados</h3>
+            <p>Crie chamadas que dão destaque às suas ofertas (uma por linha).</p>
+            <textarea className="input" rows={3} value={hooks} onChange={(e) => setHooks(e.target.value)} placeholder={'🔥 IMPERDÍVEL\n⚡ Só hoje'} />
+            <div className="chan-foot"><button onClick={() => save('ganchos', { items: hooks.split('\n').map((x) => x.trim()).filter(Boolean) })}>{saved === 'ganchos' ? 'Salvos ✓' : 'Salvar ganchos'}</button><span>›</span></div>
+          </div>
+          <div className="chan">
+            <div className="chan-top"><span className="chan-ico" style={{ background: '#2a1a3d' }}>📅</span></div>
+            <h3>Agendamentos WhatsApp</h3>
+            <p>Organize as próximas publicações nos seus grupos.</p>
+            <div className="chan-foot"><a href="/dashboard/postagens">Abrir agendamentos</a><span>›</span></div>
+          </div>
+          <div className="chan">
+            <div className="chan-top"><span className="chan-ico" style={{ background: '#3d1a2e' }}>🖼️</span></div>
+            <h3>Templates de stories</h3>
+            <p>Escolha os modelos e as cores dos seus stories.</p>
+            <div className="chan-foot"><button disabled style={{ opacity: .5 }}>Em breve</button><span>›</span></div>
+          </div>
+        </div>
+      </div>
+
+      <p className="hint" style={{ marginTop: 8 }}>Precisa de uma mão para configurar? <a href="/dashboard/config/ajuda">Acessar a Central de Ajuda ↗</a></p>
     </>
   );
 }

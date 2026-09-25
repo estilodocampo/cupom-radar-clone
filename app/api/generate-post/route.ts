@@ -30,12 +30,37 @@ export async function POST(req: NextRequest) {
   }
   const store = detectStore(url);
   let affId = affiliateId;
-  if (userId && affId === 'SEU_ID') {
-    const integ = await prisma.integration.findUnique({ where: { userId_provider: { userId, provider: store } } }).catch(() => null);
-    const cfg = integ?.config as { affiliateId?: string } | null;
-    if (cfg?.affiliateId) affId = cfg.affiliateId;
+  let finalCoupon = coupon as string | undefined;
+  let template: string | null = null;
+  let hook: string | null = null;
+  if (userId) {
+    const [storeInteg, cupons, templates, ganchos] = await Promise.all([
+      affId === 'SEU_ID' ? prisma.integration.findUnique({ where: { userId_provider: { userId, provider: store } } }).catch(() => null) : null,
+      !finalCoupon ? prisma.integration.findUnique({ where: { userId_provider: { userId, provider: 'cupons' } } }).catch(() => null) : null,
+      prisma.integration.findUnique({ where: { userId_provider: { userId, provider: 'templates' } } }).catch(() => null),
+      prisma.integration.findUnique({ where: { userId_provider: { userId, provider: 'ganchos' } } }).catch(() => null),
+    ]);
+    const scfg = storeInteg?.config as { affiliateId?: string } | null;
+    if (scfg?.affiliateId) affId = scfg.affiliateId;
+    const ccfg = cupons?.config as Record<string, string> | null;
+    if (ccfg?.[store]) finalCoupon = ccfg[store];
+    const tcfg = templates?.config as Record<string, string> | null;
+    if (tcfg?.[store]) template = tcfg[store];
+    const hcfg = ganchos?.config as { items?: string[] } | null;
+    if (hcfg?.items?.length) hook = hcfg.items[Math.floor(Math.random() * hcfg.items.length)];
   }
   const affLink = toAffiliateLink(url, affId, store);
-  const text = buildPost(store, { title, priceFrom, priceTo, link: affLink, coupon });
+  let text: string;
+  if (template) {
+    text = template
+      .replaceAll('{titulo}', title)
+      .replaceAll('{preco}', priceTo)
+      .replaceAll('{precoDe}', priceFrom || '')
+      .replaceAll('{link}', affLink)
+      .replaceAll('{cupom}', finalCoupon || '');
+  } else {
+    text = buildPost(store, { title, priceFrom, priceTo, link: affLink, coupon: finalCoupon });
+  }
+  if (hook) text = `${hook}\n\n${text}`;
   return NextResponse.json({ store, affiliateLink: affLink, text });
 }

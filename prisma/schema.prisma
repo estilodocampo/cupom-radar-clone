@@ -22,6 +22,7 @@ model User {
   scheduled     ScheduledPost[]
   dispatches    DispatchLog[]
   integrations  Integration[]
+  feedbacks     Feedback[]
   createdAt     DateTime  @default(now())
 }
 
@@ -122,4 +123,12 @@ model Integration {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, provider])
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String   @db.Text
+  createdAt DateTime @default(now())
 }
