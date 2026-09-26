@@ -44,7 +44,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
-  session: { strategy: 'database' },
+  // Sessão longa: 90 dias, renovada a cada 24h de uso (não pede login ao sair do app)
+  session: { strategy: 'database', maxAge: 90 * 24 * 60 * 60, updateAge: 24 * 60 * 60 },
   providers,
   pages: { signIn: '/login' },
   callbacks: {
