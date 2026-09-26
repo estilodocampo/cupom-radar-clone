@@ -527,7 +527,21 @@ async function handleCopiador(msg) {
     if (c.source !== remote || !c.targets.length) continue;
     const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons);
     if (!converted) continue;
-    await enviarLote(c, c.targets, comMarca(out), media, hasImage ? 'image' : hasVideo ? 'video' : null);
+    const mediaType = hasImage ? 'image' : hasVideo ? 'video' : null;
+    const foi = await enviarLote(c, c.targets, comMarca(out), media, mediaType);
+    if (!foi) continue;
+    // Cadeia determinística: o que o Copiador posta num hub dispara o
+    // Distribuidor na hora (sem depender do eco do WhatsApp, que duplicava).
+    for (const t of c.targets) {
+      for (const d of distribuidores) {
+        if (d.userId !== c.userId || d.hub !== t || d.pausado) continue;
+        try {
+          await distribuirAgora(d, out, media, mediaType);
+        } catch (e) {
+          log.warn(String(e).slice(0, 150));
+        }
+      }
+    }
   }
 }
 
@@ -606,9 +620,18 @@ function temMarca(text) {
   return typeof text === 'string' && text.includes(MARCA);
 }
 
+// Fan-out do Distribuidor para os demais grupos (1 janela por mensagem).
+// Marca o que o sistema posta: o eco futuro volta com marca e é ignorado.
+async function distribuirAgora(d, out, media, mediaType) {
+  if (!temMarca(out)) out = comMarca(out);
+  const targets = [...new Set(d.targets)].filter((t) => t !== d.hub);
+  if (!targets.length) return false;
+  return enviarLote(d, targets, out, media, mediaType);
+}
+
 // Distribuidor: o que você posta no SEU grupo é repassado para os demais.
-// Anti-loop: nunca reenvia a partir de um grupo que já é destino, e nunca
-// manda a mensagem de volta para o próprio hub.
+// Anti-loop: eco do próprio bot (com marca) nunca redistribui; a cadeia
+// Copiador -> hub é disparada por chamada direta (não depende do eco).
 async function handleDistribuidor(msg) {
   if (!msg || !msg.key) return;
   const remote = msg.key.remoteJid || '';
@@ -620,14 +643,9 @@ async function handleDistribuidor(msg) {
     if (d.hub !== remote) continue;
     const text = extractText(msg);
     if (!text || !text.trim()) continue;
-    // Eco do próprio bot: mensagens enviadas pelo sistema voltam via upsert.
-    // O Copiador marca as suas; qualquer outra fromMe é reemissão e deve ser ignorada.
-    // Com onlyMine ligado, só passa fromMe com marca (1x por oferta).
-    if (msg.key.fromMe && !temMarca(text)) continue;
-    if (d.onlyMine && !(msg.key.fromMe || temMarca(text))) continue;
+    if (temMarca(text)) continue; // eco do próprio bot: ignora
+    if (d.onlyMine && !msg.key.fromMe) continue; // só o que saiu do seu número
     if (d.requireLink && !/https?:\/\//.test(text)) continue;
-    const targets = [...new Set(d.targets)].filter((t) => t !== d.hub);
-    if (!targets.length) continue;
     let out = text;
     if (d.convert) {
       const r = await convertTextLinks(text, d.affIds, d.shopeeCreds, d.mlMattTool, d.userId, d.stripCoupons);
@@ -635,7 +653,6 @@ async function handleDistribuidor(msg) {
     }
     if (d.prefix) out = `${d.prefix}\n\n${out}`;
     if (d.suffix) out = `${out}\n\n${d.suffix}`;
-    if (!temMarca(out)) out = comMarca(out); // marca o que o sistema posta (eco futuro é ignorado)
     const hasImage = !!msg.message?.imageMessage;
     const hasVideo = !!msg.message?.videoMessage;
     let media = null;
@@ -643,7 +660,7 @@ async function handleDistribuidor(msg) {
       try { media = await downloadMediaMessage(msg, 'buffer', {}); }
       catch (e) { log.warn({ e: String(e).slice(0, 120) }, 'distribuidor midia falhou, enviando so texto'); }
     }
-    await enviarLote(d, targets, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
+    await distribuirAgora(d, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
   }
 }
 
