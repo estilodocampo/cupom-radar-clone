@@ -194,3 +194,18 @@ model RadarPost {
   @@unique([radarId, itemKey])
   @@index([radarId])
 }
+
+// Mapa hub -> cópias enviadas (para apagar nos demais quando apagar no hub)
+model ForwardMap {
+  id              String   @id @default(cuid())
+  userId          String
+  hubJid          String
+  hubMsgId        String
+  targetJid       String
+  sentMsgId       String
+  sentParticipant String?
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, hubJid, hubMsgId, targetJid])
+  @@index([hubJid, hubMsgId])
+}

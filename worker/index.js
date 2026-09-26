@@ -465,39 +465,44 @@ async function enfileirar() {
 
 // Sem fila: se não couber na janela, perde-se (decisão do usuário).
 // A trava anti-duplicata (reserva + marca) continua valendo.
+// Retorna { ok, sent: [{jid, id, participant}] } para o mapa de repasses.
 async function enviarLote(c, targets, text, mediaBuf, mediaType) {
-  if (!targets.length) return false;
+  if (!targets.length) return { ok: false, sent: [] };
   if (!(await passaLimites(c))) {
     log.info({ kind: c.kind }, 'fora da janela: oferta descartada (sem fila)');
-    return false;
+    return { ok: false, sent: [] };
   }
   const reservados = await reservarDestinos(c, targets, text, mediaBuf, mediaType);
   if (!reservados.length) {
     log.info({ kind: c.kind }, 'nada novo para enviar (anti-duplicata)');
-    return false;
+    return { ok: false, sent: [] };
   }
   let ok = 0;
+  const sent = [];
   for (const t of reservados) {
     try {
-      await sendComMidia(t, text, mediaBuf, mediaType);
+      const key = await sendComMidia(t, text, mediaBuf, mediaType);
       await pool.query('UPDATE "QueuedOffer" SET status = $1, "sentAt" = NOW() WHERE "userId" = $2 AND kind = $3 AND fp = $4 AND "targetJid" = $5', ['sent', c.userId, c.kind || 'copiador', ofertaFp(c, text), t]).catch(() => {});
+      if (key && key.id) sent.push({ jid: t, id: key.id, participant: key.participant || null });
       ok++;
     } catch (e) {
       log.warn({ e: String(e).slice(0, 200), to: t }, 'envio falhou');
     }
   }
   if (ok) marcarEnvio(c);
-  return ok > 0;
+  return { ok: ok > 0, sent };
 }
 
 async function sendComMidia(targetJid, text, mediaBuf, mediaType) {
   const caption = text.length > 1000 ? text.slice(0, 1000) : text;
   const rest = text.length > 1000 ? text.slice(1000) : '';
-  if (mediaBuf && mediaType === 'image') await sock.sendMessage(targetJid, { image: mediaBuf, caption });
-  else if (mediaBuf && mediaType === 'video') await sock.sendMessage(targetJid, { video: mediaBuf, caption });
-  else await sock.sendMessage(targetJid, { text });
+  let key = null;
+  if (mediaBuf && mediaType === 'image') key = (await sock.sendMessage(targetJid, { image: mediaBuf, caption })).key;
+  else if (mediaBuf && mediaType === 'video') key = (await sock.sendMessage(targetJid, { video: mediaBuf, caption })).key;
+  else key = (await sock.sendMessage(targetJid, { text })).key;
   if (rest && mediaBuf) await sock.sendMessage(targetJid, { text: rest });
   await new Promise((r) => setTimeout(r, 1500));
+  return key || null;
 }
 
 async function handleCopiador(msg) {
@@ -528,15 +533,15 @@ async function handleCopiador(msg) {
     const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons);
     if (!converted) continue;
     const mediaType = hasImage ? 'image' : hasVideo ? 'video' : null;
-    const foi = await enviarLote(c, c.targets, comMarca(out), media, mediaType);
-    if (!foi) continue;
+    const res = await enviarLote(c, c.targets, comMarca(out), media, mediaType);
+    if (!res.ok) continue;
     // Cadeia determinística: o que o Copiador posta num hub dispara o
     // Distribuidor na hora (sem depender do eco do WhatsApp, que duplicava).
-    for (const t of c.targets) {
+    for (const s of res.sent) {
       for (const d of distribuidores) {
-        if (d.userId !== c.userId || d.hub !== t || d.pausado) continue;
+        if (d.userId !== c.userId || d.hub !== s.jid || d.pausado) continue;
         try {
-          await distribuirAgora(d, out, media, mediaType);
+          await distribuirAgora(d, out, media, mediaType, s.id);
         } catch (e) {
           log.warn(String(e).slice(0, 150));
         }
@@ -622,11 +627,21 @@ function temMarca(text) {
 
 // Fan-out do Distribuidor para os demais grupos (1 janela por mensagem).
 // Marca o que o sistema posta: o eco futuro volta com marca e é ignorado.
-async function distribuirAgora(d, out, media, mediaType) {
+// Registra o mapa hub -> cópias para apagar em cascata quando apagarem no hub.
+async function distribuirAgora(d, out, media, mediaType, hubMsgId) {
   if (!temMarca(out)) out = comMarca(out);
   const targets = [...new Set(d.targets)].filter((t) => t !== d.hub);
   if (!targets.length) return false;
-  return enviarLote(d, targets, out, media, mediaType);
+  const res = await enviarLote(d, targets, out, media, mediaType);
+  if (res.ok && hubMsgId && pool) {
+    for (const s of res.sent) {
+      await pool.query(
+        'INSERT INTO "ForwardMap" (id, "userId", "hubJid", "hubMsgId", "targetJid", "sentMsgId", "sentParticipant") VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6) ON CONFLICT ("userId", "hubJid", "hubMsgId", "targetJid") DO NOTHING',
+        [d.userId, d.hub, hubMsgId, s.jid, s.id, s.participant]
+      ).catch(() => {});
+    }
+  }
+  return res.ok;
 }
 
 // Distribuidor: o que você posta no SEU grupo é repassado para os demais.
@@ -660,7 +675,43 @@ async function handleDistribuidor(msg) {
       try { media = await downloadMediaMessage(msg, 'buffer', {}); }
       catch (e) { log.warn({ e: String(e).slice(0, 120) }, 'distribuidor midia falhou, enviando so texto'); }
     }
-    await distribuirAgora(d, out, media, hasImage ? 'image' : hasVideo ? 'video' : null);
+    await distribuirAgora(d, out, media, hasImage ? 'image' : hasVideo ? 'video' : null, msg.key.id);
+  }
+}
+
+// Apagou no hub -> apaga as cópias nos demais grupos (dentro da janela do WhatsApp)
+async function handleApagouNoHub(gid, hubMsgId) {
+  for (const d of distribuidores) {
+    if (d.hub !== gid) continue;
+    let rows = [];
+    try {
+      const r = await pool.query(
+        'SELECT "targetJid", "sentMsgId", "sentParticipant" FROM "ForwardMap" WHERE "userId" = $1 AND "hubJid" = $2 AND "hubMsgId" = $3',
+        [d.userId, gid, hubMsgId]
+      );
+      rows = r.rows;
+    } catch { continue; }
+    let apagados = 0;
+    for (const row of rows) {
+      try {
+        await sock.sendMessage(row.targetJid, {
+          delete: {
+            remoteJid: row.targetJid,
+            fromMe: true,
+            id: row.sentMsgId,
+            ...(row.sentParticipant ? { participant: row.sentParticipant } : {}),
+          },
+        });
+        await new Promise((r) => setTimeout(r, 1500));
+        apagados++;
+      } catch (e) {
+        log.warn({ e: String(e).slice(0, 200), to: row.targetJid }, 'apagar repasse falhou (fora da janela?)');
+      }
+    }
+    if (apagados) {
+      await pool.query('DELETE FROM "ForwardMap" WHERE "userId" = $1 AND "hubJid" = $2 AND "hubMsgId" = $3', [d.userId, gid, hubMsgId]).catch(() => {});
+      log.info({ hub: gid, apagados }, 'repasse apagado junto');
+    }
   }
 }
 
@@ -696,8 +747,19 @@ async function connect() {
       try { await handleDistribuidor(m); } catch (e) { log.warn(String(e).slice(0, 200)); }
     }
   });
-  sock.ev.on('group-participants.update', async ({ id, participants, action }) => {
+  // Apagou mensagem no grupo -> se foi no hub, apaga as cópias nos demais
+  sock.ev.on('messages.delete', async ({ keys }) => {
     try {
+      for (const k of keys || []) {
+        const gid = k.remoteJid || '';
+        if (!gid.endsWith('@g.us') || !k.id) continue;
+        await handleApagouNoHub(gid, k.id);
+      }
+    } catch (e) {
+      log.warn(String(e).slice(0, 200));
+    }
+  });
+  sock.ev.on('group-participants.update', async ({ id, participants, action }) => {    try {
       if (action !== 'add' || !id.endsWith('@g.us')) return;
       for (const b of boasvindasCfgs) {
         if (!b.targets.includes(id) || !b.text) continue;
@@ -960,5 +1022,9 @@ connect().catch((e) => log.error(String(e)));
 loadCopiadores().catch(() => {});
 setInterval(tick, 15000);
 setInterval(loadCopiadores, 60000);
+// Limpa mapas de repasse com mais de 7 dias (fora da janela de apagar do WhatsApp)
+setInterval(() => {
+  if (pool) pool.query('DELETE FROM "ForwardMap" WHERE "createdAt" < NOW() - INTERVAL \'7 days\'').catch(() => {});
+}, 24 * 3600 * 1000);
 setInterval(() => tickRadar().catch((e) => log.warn(String(e).slice(0, 150))), 5 * 60 * 1000);
 setTimeout(() => tickRadar().catch(() => {}), 60000);
