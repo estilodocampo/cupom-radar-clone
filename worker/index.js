@@ -387,15 +387,15 @@ function marcarEnvio(c) {
 
 // Registra a oferta na fila (chave única = usuário+kind+texto+destino).
 // É o que trava repetição: o índice único impede o mesmo texto 2x no mesmo grupo.
-async function registrarOferta(c, targetJid, text, status, mediaBuf, mediaType) {
+// NUNCA grava mídia (base64 de ~1MB por envio lotou o disco em 09/2026);
+// a anti-duplicata só precisa do hash do texto.
+async function registrarOferta(c, targetJid, text, status) {
   if (!pool) return false;
-  const useMedia = mediaBuf && mediaBuf.length < MEDIA_MAX_B64;
-  const media = useMedia ? mediaBuf.toString('base64') : null;
   const fp = ofertaFp(c, text);
   try {
     const res = await pool.query(
-      'INSERT INTO "QueuedOffer" (id, "userId", kind, "targetJid", text, "mediaType", media, fp, status) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT ("userId", kind, fp, "targetJid") DO NOTHING',
-      [c.userId, c.kind || 'copiador', targetJid, text, useMedia ? mediaType : null, media, fp, status]
+      'INSERT INTO "QueuedOffer" (id, "userId", kind, "targetJid", text, "mediaType", media, fp, status) VALUES (gen_random_uuid(), $1, $2, $3, $4, NULL, NULL, $5, $6) ON CONFLICT ("userId", kind, fp, "targetJid") DO NOTHING',
+      [c.userId, c.kind || 'copiador', targetJid, text, fp, status]
     );
     return res.rowCount > 0;
   } catch (e) {
@@ -434,7 +434,7 @@ async function reservarDestinos(c, targets, text, mediaBuf, mediaType) {
   for (const t of targets) {
     if (cacheBloqueia(c, t, text)) continue;
     if (await jaProcessou(c, t, text)) { marcarCache(c, t, text); continue; }
-    if (await registrarOferta(c, t, text, 'sending', mediaBuf, mediaType)) {
+    if (await registrarOferta(c, t, text, 'sending')) {
       marcarCache(c, t, text);
       ok.push(t);
     }
@@ -1025,6 +1025,10 @@ setInterval(loadCopiadores, 60000);
 // Limpa mapas de repasse com mais de 7 dias (fora da janela de apagar do WhatsApp)
 setInterval(() => {
   if (pool) pool.query('DELETE FROM "ForwardMap" WHERE "createdAt" < NOW() - INTERVAL \'7 days\'').catch(() => {});
+}, 24 * 3600 * 1000);
+// Retenção anti-duplicata: registros com mais de 7 dias não bloqueiam mais nada
+setInterval(() => {
+  if (pool) pool.query('DELETE FROM "QueuedOffer" WHERE "createdAt" < NOW() - INTERVAL \'7 days\'').catch(() => {});
 }, 24 * 3600 * 1000);
 setInterval(() => tickRadar().catch((e) => log.warn(String(e).slice(0, 150))), 5 * 60 * 1000);
 setTimeout(() => tickRadar().catch(() => {}), 60000);
