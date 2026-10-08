@@ -25,6 +25,8 @@ model User {
   integrations  Integration[]
   feedbacks     Feedback[]
   radars        RadarConfig[]
+  copiadorRules CopiadorRule[]
+  distribuidorRules DistribuidorRule[]
   createdAt     DateTime  @default(now())
 }
 
@@ -116,8 +118,11 @@ model DispatchLog {
   message   String   @db.Text
   status    String
   kind      String?
+  ruleId    String?
   error     String?
   sentAt    DateTime @default(now())
+
+  @@index([userId, kind, ruleId, sentAt])
 }
 
 // Fila: ofertas aguardando a janela de frequência (nada é descartado)
@@ -196,6 +201,46 @@ model RadarPost {
 
   @@unique([radarId, itemKey])
   @@index([radarId])
+}
+
+// Regras de cópia: várias por número (origens diferentes -> hubs)
+model CopiadorRule {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String   @default("")
+  slot        String   @default("wa1")
+  source      String
+  hub         String
+  keepCoupons Boolean  @default(false)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, slot])
+}
+
+// Regras de distribuição: várias por número (hub -> demais grupos)
+model DistribuidorRule {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String   @default("")
+  slot         String   @default("wa1")
+  hub          String
+  targets      String[] @default([])
+  onlyMine     Boolean  @default(false)
+  requireLink  Boolean  @default(false)
+  convert      Boolean  @default(true)
+  stripCoupons Boolean  @default(true)
+  prefix       String   @default("")
+  suffix       String   @default("")
+  minInterval  Int      @default(0)
+  maxPerDay    Int      @default(0)
+  dedupHoras   Int      @default(24)
+  pausado      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([userId, slot])
 }
 
 // Mapa hub -> cópias enviadas (para apagar nos demais quando apagar no hub)

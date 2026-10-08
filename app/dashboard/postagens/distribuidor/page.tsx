@@ -3,6 +3,11 @@ import { useEffect, useState } from 'react';
 import { SlotPicker } from '../SlotPicker';
 
 type Group = { id: string; name: string };
+type Rule = {
+  id: string; name: string; slot: string; hub: string; targets: string[];
+  onlyMine: boolean; requireLink: boolean; convert: boolean; stripCoupons: boolean;
+  prefix: string; suffix: string; minInterval: number; maxPerDay: number; dedupHoras: number; pausado: boolean;
+};
 
 const INTERVALS = [
   { v: 0, l: 'Sem limite (toda mensagem)' },
@@ -14,7 +19,7 @@ const INTERVALS = [
   { v: 1440, l: 'No máximo 1 por dia' },
 ];
 
-const MAXES = [0, 1, 2, 3, 5, 10, 20];
+const MAXES = [0, 1, 2, 3, 5, 10, 20, 50];
 const DEDUP = [
   { v: 0, l: 'Não bloquear' },
   { v: 6, l: '6 horas' },
@@ -24,9 +29,13 @@ const DEDUP = [
 ];
 
 export default function Distribuidor() {
-  const [hub, setHub] = useState('');
   const [slot, setSlot] = useState<'wa1' | 'wa2'>('wa1');
   const [phones, setPhones] = useState<Record<string, string | undefined>>({});
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [hub, setHub] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [extra, setExtra] = useState('');
   const [onlyMine, setOnlyMine] = useState(false);
@@ -39,58 +48,49 @@ export default function Distribuidor() {
   const [maxPerDay, setMaxPerDay] = useState(0);
   const [dedupHoras, setDedupHoras] = useState(24);
   const [pausado, setPausado] = useState(false);
-  const [groups, setGroups] = useState<Group[]>([]);
   const [msg, setMsg] = useState('');
 
   async function loadGroups(sl: 'wa1' | 'wa2') {
     const g = await fetch(`/api/whatsapp/groups?slot=${sl}`).then((r) => r.json()).catch(() => null);
-    const gl = (g?.groups || []) as Group[];
-    setGroups(gl);
-    return gl;
+    setGroups((g?.groups || []) as Group[]);
   }
 
-  useEffect(() => {
-    fetch('/api/whatsapp/status').then((r) => r.json()).then((s) => {
-      const slots = s?.slots || {};
-      const ph: Record<string, string | undefined> = {};
-      for (const k of ['wa1', 'wa2']) if (slots[k]?.phone) ph[k] = slots[k].phone;
-      setPhones(ph);
-    }).catch(() => {});
-    Promise.all([
-      loadGroups('wa1'),
-      fetch('/api/integrations').then((r) => r.json()).catch(() => null),
-    ]).then(([gl, d]) => {
-      const it = (d?.items || []).find((x: { provider: string }) => x.provider === 'distribuidor');
-      const c = (it?.config || {}) as Record<string, unknown>;
-      const saved = (c.targets as string[]) || [];
-      if ((c.slot as string) === 'wa2') {
-        setSlot('wa2');
-        loadGroups('wa2').then((gl2) => {
-          setPicked(saved.filter((t) => gl2.some((x) => x.id === t)));
-          setExtra(saved.filter((t) => !gl2.some((x) => x.id === t)).join('\n'));
-        });
-      } else {
-        setPicked(saved.filter((t) => gl.some((x) => x.id === t)));
-        setExtra(saved.filter((t) => !gl.some((x) => x.id === t)).join('\n'));
-      }
-      setHub((c.hub as string) || '');
-      setOnlyMine(!!c.onlyMine);
-      setRequireLink(!!c.requireLink);
-      setConvert(c.convert !== false);
-      setStripCoupons(c.stripCoupons !== false);
-      setPrefix((c.prefix as string) || '');
-      setSuffix((c.suffix as string) || '');
-      setMinInterval(Number(c.minInterval) || 0);
-      setMaxPerDay(Number(c.maxPerDay) || 0);
-      setDedupHoras(Number.isFinite(Number(c.dedupHoras)) ? Number(c.dedupHoras) : 24);
-      setPausado(!!c.pausado);
-      setPicked(saved.filter((t) => gl.some((x) => x.id === t)));
-      setExtra(saved.filter((t) => !gl.some((x) => x.id === t)).join('\n'));
-    }).catch(() => {});
-  }, []);
+  async function load() {
+    const d = await fetch('/api/distribuidor/rules').then((r) => r.json()).catch(() => null);
+    setRules((d?.items || []) as Rule[]);
+    const s = await fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null);
+    const slots = s?.slots || {};
+    const ph: Record<string, string | undefined> = {};
+    for (const k of ['wa1', 'wa2']) if (slots[k]?.phone) ph[k] = slots[k].phone;
+    setPhones(ph);
+  }
+
+  useEffect(() => { loadGroups(slot); load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function changeSlot(sl: 'wa1' | 'wa2') {
+    setSlot(sl);
+    resetForm();
+    loadGroups(sl);
+  }
+
+  function resetForm() {
+    setEditing(null); setName(''); setHub(''); setPicked([]); setExtra('');
+    setOnlyMine(false); setRequireLink(false); setConvert(true); setStripCoupons(true);
+    setPrefix(''); setSuffix(''); setMinInterval(0); setMaxPerDay(0); setDedupHoras(24); setPausado(false);
+  }
+
+  function edit(r: Rule) {
+    setEditing(r.id); setName(r.name); setHub(r.hub);
+    setOnlyMine(r.onlyMine); setRequireLink(r.requireLink); setConvert(r.convert); setStripCoupons(r.stripCoupons);
+    setPrefix(r.prefix); setSuffix(r.suffix); setMinInterval(r.minInterval); setMaxPerDay(r.maxPerDay);
+    setDedupHoras(r.dedupHoras); setPausado(r.pausado);
+    setPicked(r.targets.filter((t) => groups.some((g) => g.id === t)));
+    setExtra(r.targets.filter((t) => !groups.some((g) => g.id === t)).join('\n'));
+    window.scrollTo({ top: 0 });
+  }
 
   function toggle(id: string) {
-    if (id === hub) return; // nunca distribuir para o próprio hub
+    if (id === hub) return;
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   }
 
@@ -99,51 +99,59 @@ export default function Distribuidor() {
     return [...new Set([...picked, ...manual])].filter((t) => t !== hub);
   }
 
-  function configAtual(over: Record<string, unknown> = {}) {
-    return {
-      hub, targets: targetsAtuais(), onlyMine, requireLink, convert, stripCoupons,
-      prefix, suffix, minInterval, maxPerDay, dedupHoras, pausado, slot, ...over,
-    };
+  function gname(id: string) {
+    return groups.find((g) => g.id === id)?.name || `${id.slice(0, 14)}…`;
   }
 
-  function changeSlot(sl: 'wa1' | 'wa2') {
-    setSlot(sl);
-    setHub('');
-    setPicked([]);
-    setExtra('');
-    loadGroups(sl);
-  }
-
-  async function save() {
-    if (!hub) { setMsg('❌ Selecione o SEU grupo (o hub).'); return; }
+  async function save(pausadoOver?: boolean) {
+    if (!hub.endsWith('@g.us')) { setMsg('❌ Selecione o SEU grupo (o hub).'); return; }
     const all = targetsAtuais();
     if (!all.length) { setMsg('❌ Selecione ao menos um grupo para receber.'); return; }
-    const res = await fetch('/api/integrations', {
+    const res = await fetch('/api/distribuidor/rules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'distribuidor', config: configAtual() }),
+      body: JSON.stringify({
+        id: editing || undefined, name, slot, hub, targets: all, onlyMine, requireLink, convert,
+        stripCoupons, prefix, suffix, minInterval, maxPerDay, dedupHoras,
+        pausado: pausadoOver !== undefined ? pausadoOver : pausado,
+      }),
     });
     const d = await res.json().catch(() => ({}));
-    setMsg(res.ok ? '✅ Distribuidor salvo! Tudo que você postar no seu grupo será repassado.' : `❌ ${d.error || 'Falha ao salvar'}`);
+    if (!res.ok) { setMsg(`❌ ${d.error || 'Falha ao salvar'}`); return; }
+    if (pausadoOver !== undefined) setPausado(pausadoOver);
+    resetForm();
+    load();
+    setMsg('✅ Regra salva! Tudo que passar pelo hub será repassado.');
   }
+
+  async function remove(id: string) {
+    if (!confirm('Excluir esta regra de distribuição?')) return;
+    await fetch(`/api/distribuidor/rules?id=${id}`, { method: 'DELETE' });
+    load();
+  }
+
+  const mine = rules.filter((r) => (r.slot || 'wa1') === slot);
 
   return (
     <>
       <a className="back" href="/dashboard/postagens">← Postagens</a>
       <div className="eyebrow">● DISTRIBUIDOR</div>
       <h1 className="h1">Distribuidor</h1>
-      <p className="sub">
-        Fonte → seu grupo → outros grupos. {pausado ? <span className="badge badge-err">PAUSADO</span> : <span className="badge badge-ok">ATIVO</span>}
-      </p>
+      <p className="sub">Uma regra por hub: do seu grupo para os demais, com as suas regras.</p>
       {msg && <p>{msg}</p>}
 
+      <label className="lbl">Número que distribui</label>
+      <SlotPicker slot={slot} setSlot={changeSlot} phones={phones} />
+
       <div className="card" style={{ maxWidth: 720 }}>
-        <div className="dash-section" style={{ marginTop: 0 }}>
+        <h3>{editing ? 'Editar regra' : 'Nova regra'}</h3>
+        <label className="lbl">Nome (opcional)</label>
+        <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Country wa1" />
+
+        <div className="dash-section" style={{ marginTop: 12 }}>
           <div className="dash-eyebrow">1 · ENTRADA</div>
         </div>
-        <label className="lbl">Número que distribui</label>
-        <SlotPicker slot={slot} setSlot={changeSlot} phones={phones} />
-        <label className="lbl">Seu grupo (hub) — o que você posta aqui é distribuído</label>
+        <label className="lbl">Seu grupo (hub) — o que passa aqui é distribuído</label>
         <select className="input" value={hub} onChange={(e) => { setHub(e.target.value); setPicked((p) => p.filter((x) => x !== e.target.value)); }}>
           <option value="">Selecione seu grupo...</option>
           {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -204,24 +212,37 @@ export default function Distribuidor() {
         <label className="lbl">Texto depois de cada mensagem (opcional)</label>
         <input className="input" value={suffix} onChange={(e) => setSuffix(e.target.value)} placeholder="Compre pelo link e receba comissão" />
 
-        <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={save}>Salvar distribuidor</button>
-        <button
-          className="btn btn-sm"
-          style={{ marginTop: 12, marginLeft: 8, background: pausado ? '#1d4ed8' : '#c0362c', color: '#fff' }}
-          onClick={async () => {
-            const next = !pausado;
-            if (!next && !confirm('Pausar agora? Nenhuma oferta será repassada até você retomar.')) return;
-            setPausado(next);
-            await fetch('/api/integrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'distribuidor', config: configAtual({ pausado: next }) }) });
-            setMsg(next ? '⏸️ Distribuidor PAUSADO. Nada será repostado.' : '▶️ Distribuidor retomado.');
-          }}
-        >
-          {pausado ? '▶️ Retomar repasse' : '⏸️ Pausar repasse agora'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          <button className="btn btn-primary btn-sm" onClick={() => save()}>{editing ? 'Atualizar regra' : 'Criar regra'}</button>
+        </div>
         <p className="hint" style={{ marginTop: 8 }}>
           Trava anti-loop ativa: nunca repassa a partir de um grupo que já recebe, e nunca devolve ao seu hub. O worker aplica em até 60s.
         </p>
         <p className="hint">🗑️ Apagou no seu grupo? As cópias saem dos demais automaticamente (dentro da janela do WhatsApp, ~2 dias).</p>
+      </div>
+
+      <div style={{ marginTop: 16, maxWidth: 720 }}>
+        {mine.length === 0 && <p className="hint">Nenhuma regra neste número ainda.</p>}
+        {mine.map((r) => (
+          <div className="card" key={r.id} style={{ marginBottom: 8 }}>
+            <b>{r.name || 'Distribuição'}</b> {r.pausado ? <span className="badge badge-err">PAUSADO</span> : <span className="badge badge-ok">ATIVO</span>}
+            <p className="hint">{gname(r.hub)} → {r.targets.length} grupo(s){r.minInterval ? ` · 1/${r.minInterval}min` : ''}{r.maxPerDay ? ` · máx ${r.maxPerDay}/dia` : ''}</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => edit(r)}>Editar</button>
+              <button
+                className="btn btn-sm"
+                style={{ background: r.pausado ? '#1d4ed8' : '#c0362c', color: '#fff' }}
+                onClick={async () => {
+                  await fetch('/api/distribuidor/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, name: r.name, slot: r.slot, hub: r.hub, targets: r.targets, onlyMine: r.onlyMine, requireLink: r.requireLink, convert: r.convert, stripCoupons: r.stripCoupons, prefix: r.prefix, suffix: r.suffix, minInterval: r.minInterval, maxPerDay: r.maxPerDay, dedupHoras: r.dedupHoras, pausado: !r.pausado }) });
+                  load();
+                }}
+              >
+                {r.pausado ? '▶️ Retomar' : '⏸️ Pausar'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => remove(r.id)}>Excluir</button>
+            </div>
+          </div>
+        ))}
       </div>
     </>
   );

@@ -290,13 +290,11 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
 async function loadCopiadores() {
   if (!pool) return;
   try {
-    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)', ['copiador', 'distribuidor', 'shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'lista_envio', 'shopee_api', 'boasvindas']);
+    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8,$9)', ['shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'lista_envio', 'shopee_api', 'boasvindas']);
     const byUser = {};
     for (const r of rows) {
       byUser[r.userId] = byUser[r.userId] || { affIds: {} };
       if (r.provider === 'boasvindas') byUser[r.userId].boasvindas = r.config || {};
-      else if (r.provider === 'distribuidor') byUser[r.userId].distribuidor = r.config || {};
-      else if (r.provider === 'copiador') byUser[r.userId].copiador = r.config || {};
       else if (r.provider === 'shopee_api' && r.config && r.config.appId && r.config.secret) byUser[r.userId].shopeeCreds = { appId: r.config.appId, secret: r.config.secret };
       else if (r.provider === 'mercadolivre' && r.config) {
         if (r.config.mattTool) byUser[r.userId].mlMattTool = r.config.mattTool;
@@ -304,37 +302,39 @@ async function loadCopiadores() {
       }
       else if (r.provider && r.config && r.config.affiliateId) byUser[r.userId].affIds[r.provider] = r.config.affiliateId;
     }
-    // Distribuidor primeiro: o Copiador entrega no hub definido lá
-    distribuidores = Object.entries(byUser)
-      .filter(([, v]) => v.distribuidor && v.distribuidor.hub && (v.distribuidor.targets || []).length)      .map(([userId, v]) => {
-        const c = v.distribuidor;
+    // Regras de distribuição (várias por número)
+    const dist = await pool.query('SELECT id,"userId",name,slot,hub,targets,"onlyMine","requireLink",convert,"stripCoupons",prefix,suffix,"minInterval","maxPerDay","dedupHoras",pausado FROM "DistribuidorRule"').catch(() => ({ rows: [] }));
+    distribuidores = dist.rows
+      .filter((r) => r.hub && (r.targets || []).length)
+      .map((r) => {
+        const v = byUser[r.userId] || { affIds: {} };
         return {
-          userId, kind: 'distribuidor', slot: c.slot || 'wa1', hub: c.hub, targets: c.targets || [],
-          onlyMine: !!c.onlyMine, requireLink: !!c.requireLink, convert: c.convert !== false,
-          pausado: !!c.pausado,
-          stripCoupons: c.stripCoupons !== false,
-          dedupHoras: Number.isFinite(Number(c.dedupHoras)) ? Number(c.dedupHoras) : 24,
-          prefix: String(c.prefix || '').slice(0, 300), suffix: String(c.suffix || '').slice(0, 300),
-          minInterval: Number(c.minInterval) || 0, maxPerDay: Number(c.maxPerDay) || 0,
+          userId: r.userId, kind: 'distribuidor', ruleId: r.id, name: r.name || '', slot: r.slot || 'wa1',
+          hub: r.hub, targets: r.targets || [],
+          onlyMine: !!r.onlyMine, requireLink: !!r.requireLink, convert: r.convert !== false,
+          pausado: !!r.pausado,
+          stripCoupons: r.stripCoupons !== false,
+          dedupHoras: Number.isFinite(Number(r.dedupHoras)) ? Number(r.dedupHoras) : 24,
+          prefix: String(r.prefix || '').slice(0, 300), suffix: String(r.suffix || '').slice(0, 300),
+          minInterval: Number(r.minInterval) || 0, maxPerDay: Number(r.maxPerDay) || 0,
           affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null,
         };
       });
     if (distribuidores.length) log.info({ n: distribuidores.length }, 'distribuidores ativos');
-    const hubPorUser = {};
-    for (const d of distribuidores) hubPorUser[d.userId] = d.hub;
-    copiadores = Object.entries(byUser)
-      .filter(([, v]) => v.copiador && v.copiador.source)
-      .map(([userId, v]) => ({
-        userId,
-        source: v.copiador.source,
-        slot: v.copiador.slot || 'wa1',
-        // Destino = seu hub (do Distribuidor); sem Distribuidor, usa os destinos salvos
-        targets: hubPorUser[userId] ? [hubPorUser[userId]] : (v.copiador.targets || []),
-        keepCoupons: !!v.copiador.keepCoupons,
-        dedupHoras: Number.isFinite(Number(v.copiador.dedupHoras)) ? Number(v.copiador.dedupHoras) : 24,
-        minInterval: Number(v.copiador.minInterval) || 0, maxPerDay: Number(v.copiador.maxPerDay) || 0,
-        affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null,
-      }));
+    // Regras de cópia (várias por número): cada uma alimenta o seu hub
+    const cop = await pool.query('SELECT id,"userId",name,slot,source,hub,"keepCoupons" FROM "CopiadorRule" WHERE active = true').catch(() => ({ rows: [] }));
+    copiadores = cop.rows
+      .filter((r) => r.source && r.hub)
+      .map((r) => {
+        const v = byUser[r.userId] || { affIds: {} };
+        return {
+          userId: r.userId, kind: 'copiador', ruleId: r.id, name: r.name || '', slot: r.slot || 'wa1',
+          source: r.source, targets: [r.hub],
+          keepCoupons: !!r.keepCoupons,
+          dedupHoras: 24, minInterval: 0, maxPerDay: 0,
+          affIds: v.affIds, shopeeCreds: v.shopeeCreds || null, mlMattTool: v.mlMattTool || null,
+        };
+      });
     if (copiadores.length) log.info({ n: copiadores.length }, 'copiadores ativos');
     boasvindasCfgs = Object.entries(byUser)
       .filter(([, v]) => v.boasvindas && (v.boasvindas.targets || []).length && v.boasvindas.text)
@@ -349,18 +349,18 @@ function extractText(msg) {
   return m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || null;
 }
 
-// Chave de contagem: separa Copiador e Distribuidor do mesmo usuário
-function limKey(c) { return `${c.userId}:${c.kind || 'copiador'}`; }
+// Chave de contagem: separa por usuário, tipo e REGRA (várias regras por número)
+function limKey(c) { return `${c.userId}:${c.kind || 'copiador'}:${c.ruleId || ''}`; }
 
 const MEDIA_MAX_B64 = 2 * 1024 * 1024; // ~1,5MB: acima disso envia na hora
 
-// Contagem diária vinda do banco (sobrevive a reinício do worker)
+// Contagem diária vinda do banco (sobrevive a reinício do worker), por regra
 async function enviadosHoje(c) {
   if (!pool) return (sentDays.get(limKey(c)) || { count: 0 }).count;
   try {
     const { rows } = await pool.query(
-      'SELECT COUNT(*)::int AS n FROM "DispatchLog" WHERE "userId" = $1 AND COALESCE(kind, $3) = $2 AND "sentAt" >= CURRENT_DATE',
-      [c.userId, c.kind || 'copiador', 'copiador']
+      'SELECT COUNT(*)::int AS n FROM "DispatchLog" WHERE "userId" = $1 AND COALESCE(kind, $3) = $2 AND COALESCE("ruleId", \'\') = $4 AND "sentAt" >= CURRENT_DATE',
+      [c.userId, c.kind || 'copiador', 'copiador', c.ruleId || '']
     );
     return rows[0] ? rows[0].n : 0;
   } catch {
@@ -486,6 +486,7 @@ async function enviarLote(c, targets, text, mediaBuf, mediaType, slot) {
     try {
       const key = await sendComMidia(t, text, mediaBuf, mediaType, slot);
       await pool.query('UPDATE "QueuedOffer" SET status = $1, "sentAt" = NOW() WHERE "userId" = $2 AND kind = $3 AND fp = $4 AND "targetJid" = $5', ['sent', c.userId, c.kind || 'copiador', ofertaFp(c, text), t]).catch(() => {});
+      await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind, "ruleId") VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)', [c.userId, t, text, 'sent', c.kind || 'copiador', c.ruleId || null]).catch(() => {});
       if (key && key.id) sent.push({ jid: t, id: key.id, participant: key.participant || null });
       ok++;
     } catch (e) {
