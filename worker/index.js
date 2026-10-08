@@ -499,8 +499,9 @@ async function sendComMidia(targetJid, text, mediaBuf, mediaType) {
   let key = null;
   if (mediaBuf && mediaType === 'image') key = (await sock.sendMessage(targetJid, { image: mediaBuf, caption })).key;
   else if (mediaBuf && mediaType === 'video') key = (await sock.sendMessage(targetJid, { video: mediaBuf, caption })).key;
-  else key = (await sock.sendMessage(targetJid, { text })).key;
-  if (rest && mediaBuf) await sock.sendMessage(targetJid, { text: rest });
+  // linkPreview: null = sem card de preview (o card repetia o título do anúncio)
+  else key = (await sock.sendMessage(targetJid, { text, linkPreview: null })).key;
+  if (rest && mediaBuf) await sock.sendMessage(targetJid, { text: rest, linkPreview: null });
   await new Promise((r) => setTimeout(r, 1500));
   return key || null;
 }
@@ -806,7 +807,7 @@ async function connect() {
 
 async function sendText(to, text) {
   if (!sock || !connected) throw new Error('whatsapp desconectado');
-  await sock.sendMessage(to, { text });
+  await sock.sendMessage(to, { text, linkPreview: null });
 }
 
 // Indica em quais grupos o usuário pode enviar: é admin (ou não éRestrito)
@@ -942,7 +943,7 @@ async function tickRadar() {
         const text = buildShopeePost({ title: item.title, priceFrom: item.priceFrom, priceTo: item.priceTo, link: short });
         for (const t of radar.targetGroups || []) {
           try {
-            await sock.sendMessage(t, { text });
+            await sock.sendMessage(t, { text, linkPreview: null });
             await new Promise((rr) => setTimeout(rr, 1500));
             await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [radar.userId, t, text, 'sent', 'radar']).catch(() => {});
           } catch (e) {
