@@ -101,6 +101,7 @@ export default function Copiador() {
           <option value="">Selecione seu grupo...</option>
           {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
+        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => loadGroups(slot)}>↻ Recarregar grupos do 📱 {slot === 'wa1' ? '1' : '2'}</button>
         <input className="input" style={{ marginTop: 8 }} value={hub} onChange={(e) => setHub(e.target.value)} placeholder="Ou cole o JID do hub" />
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
           <input type="checkbox" checked={keepCoupons} onChange={(e) => setKeepCoupons(e.target.checked)} /> Manter cupons da origem

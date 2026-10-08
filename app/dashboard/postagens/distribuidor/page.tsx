@@ -156,6 +156,7 @@ export default function Distribuidor() {
           <option value="">Selecione seu grupo...</option>
           {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
+        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => loadGroups(slot)}>↻ Recarregar grupos do 📱 {slot === 'wa1' ? '1' : '2'}</button>
         <p className="hint">O Modo Copiador pode alimentar este grupo automaticamente a partir da fonte.</p>
 
         <div className="dash-section">
