@@ -1,16 +1,18 @@
 'use client';
 import { useState } from 'react';
 import Whatsapp from '../../whatsapp';
+import { SlotPicker } from '../SlotPicker';
 
 export default function Produtos() {
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('Fone Bluetooth TWS');
   const [priceTo, setPriceTo] = useState('R$ 49,90');
+  const [slot, setSlot] = useState<'wa1' | 'wa2'>('wa1');
   const [result, setResult] = useState('');
 
   async function generate() {
     setResult('Gerando...');
-    const res = await fetch('/api/generate-post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, title, priceTo }) });
+    const res = await fetch('/api/generate-post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, title, priceTo, slot }) });
     const data = await res.json();
     setResult((data.text || JSON.stringify(data)) + (data.warning ? `\n\n⚠️ ${data.warning}` : ''));
   }
@@ -24,6 +26,8 @@ export default function Produtos() {
       <div className="grid" style={{ maxWidth: 720 }}>
         <div className="card">
           <h3>✨ Gerar oferta</h3>
+          <label className="lbl">Número do link</label>
+          <SlotPicker slot={slot} setSlot={setSlot} phones={{}} />
           <label className="lbl">Link do produto</label>
           <input className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." />
           <label className="lbl">Título</label>

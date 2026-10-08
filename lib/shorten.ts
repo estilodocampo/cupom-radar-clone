@@ -10,18 +10,20 @@ function newCode() {
 }
 
 // Encurtador próprio: /r/xxxx no nosso domínio, redirect direto sem interstitial.
-export async function shortenUrl(longUrl: string, userId?: string | null): Promise<string> {
+// Cada número tem seus próprios códigos (mesmo produto = link diferente por número).
+export async function shortenUrl(longUrl: string, userId?: string | null, slot?: string | null): Promise<string> {
   if (longUrl.length <= 60) return longUrl;
   const short = `${baseUrl()}/r/`;
+  const sl = slot === 'wa2' ? 'wa2' : 'wa1';
   // 1) tenta gravar no banco (funciona com ou sem usuário)
   for (let i = 0; i < 3; i++) {
     const code = newCode();
     try {
       const existing = await prisma.shortLink
-        .findFirst({ where: { url: longUrl }, select: { code: true } })
+        .findFirst({ where: { url: longUrl, slot: sl }, select: { code: true } })
         .catch(() => null);
       if (existing) return short + existing.code;
-      await prisma.shortLink.create({ data: { code, url: longUrl, userId: userId || null } });
+      await prisma.shortLink.create({ data: { code, url: longUrl, userId: userId || null, slot: sl } });
       return short + code;
     } catch {
       // colisão ou banco fora: tenta o próximo código

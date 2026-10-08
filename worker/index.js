@@ -208,17 +208,18 @@ async function shopeeShortLink(originUrl, subIds, creds) {
 }
 
 // Encurtador próprio: grava no banco e devolve /r/xxxx (redirect direto, sem interstitial)
-async function shortenUrl(longUrl, userId, timeoutMs = 8000) {
+async function shortenUrl(longUrl, userId, slot, timeoutMs = 8000) {
   if (longUrl.length <= 60) return longUrl;
+  const sl = slot === 'wa2' ? 'wa2' : 'wa1';
   if (pool) {
     try {
-      const ex = await pool.query('SELECT code FROM "ShortLink" WHERE url = $1 LIMIT 1', [longUrl]);
+      const ex = await pool.query('SELECT code FROM "ShortLink" WHERE url = $1 AND slot = $2 LIMIT 1', [longUrl, sl]);
       if (ex.rows[0]) return `${WEB_URL}/r/${ex.rows[0].code}`;
     } catch { /* segue */ }
     for (let i = 0; i < 3; i++) {
       const code = crypto.randomBytes(3).toString('base64url');
       try {
-        await pool.query('INSERT INTO "ShortLink" (id, code, url, "userId") VALUES (gen_random_uuid(), $1, $2, $3)', [code, longUrl, userId || null]);
+        await pool.query('INSERT INTO "ShortLink" (id, code, url, "userId", slot) VALUES (gen_random_uuid(), $1, $2, $3, $4)', [code, longUrl, userId || null, sl]);
         return `${WEB_URL}/r/${code}`;
       } catch { /* colisão */ }
     }
@@ -239,7 +240,7 @@ async function shortenUrl(longUrl, userId, timeoutMs = 8000) {
   return longUrl;
 }
 
-async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, stripCoupons = true) {
+async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, stripCoupons = true, slot = 'wa1') {
   let converted = 0;
   const urls = [...new Set(text.match(/https?:\/\/[^\s)]+/g) || [])];
   let out = text;
@@ -275,7 +276,7 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
         converted++;
       }
       if (final) {
-        final = await shortenUrl(final, userId);
+        final = await shortenUrl(final, userId, slot);
         out = out.split(raw).join(final);
       }
     } catch (e) {
@@ -537,7 +538,7 @@ async function handleCopiador(msg, slot) {
   for (const c of copiadores) {
     if ((c.slot || 'wa1') !== slot) continue;
     if (c.source !== remote || !c.targets.length) continue;
-    const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons);
+    const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons, c.slot);
     if (!converted) continue;
     const mediaType = hasImage ? 'image' : hasVideo ? 'video' : null;
     const res = await enviarLote(c, c.targets, comMarca(out), media, mediaType, slot);
@@ -672,7 +673,7 @@ async function handleDistribuidor(msg, slot) {
     if (d.requireLink && !/https?:\/\//.test(text)) continue;
     let out = text;
     if (d.convert) {
-      const r = await convertTextLinks(text, d.affIds, d.shopeeCreds, d.mlMattTool, d.userId, d.stripCoupons);
+      const r = await convertTextLinks(text, d.affIds, d.shopeeCreds, d.mlMattTool, d.userId, d.stripCoupons, d.slot);
       if (r.converted) out = r.out;
     }
     if (d.prefix) out = `${d.prefix}\n\n${out}`;

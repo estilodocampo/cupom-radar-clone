@@ -7,7 +7,7 @@ import { checkPostLimit, incrementPostUsage } from '../../../lib/subscription';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  let { url, title, priceFrom, priceTo, coupon, affiliateId = 'SEU_ID' } = body;
+  let { url, title, priceFrom, priceTo, coupon, affiliateId = 'SEU_ID', slot } = body;
   if (!url || !title || !priceTo) {
     return NextResponse.json({ error: 'url, title, priceTo obrigatórios' }, { status: 400 });
   }
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       ? toMlAffiliateLink(mlBase, affId, mlMattTool)
       : toAffiliateLink(url, affId, store));
   const { shortenUrl } = await import('../../../lib/shorten');
-  const affLink = await shortenUrl(affLink0, userId);
+  const affLink = await shortenUrl(affLink0, userId, slot);
   let text: string;
   if (template) {
     text = template
