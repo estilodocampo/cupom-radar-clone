@@ -11,7 +11,6 @@ export default function Envio() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [groupJid, setGroupJid] = useState('');
   const [autoNovo, setAutoNovo] = useState(true);
-  const [linkMode, setLinkMode] = useState('site');
   const [msg, setMsg] = useState('');
 
   async function loadGroups(sl: Slot) {
@@ -32,11 +31,10 @@ export default function Envio() {
     fetch('/api/integrations').then((r) => r.json()).then((d) => {
       const it = (d.items || []).find((x: { provider: string }) => x.provider === 'envio_auto');
       if (it?.config) {
-        const c = it.config as { groupJid?: string; autoNovo?: boolean; linkMode?: string; slot?: Slot };
+        const c = it.config as { groupJid?: string; autoNovo?: boolean; slot?: Slot };
         if (c.slot === 'wa2') { setSlot('wa2'); loadGroups('wa2'); }
         if (c.groupJid) setGroupJid(c.groupJid);
         if (typeof c.autoNovo === 'boolean') setAutoNovo(c.autoNovo);
-        if (c.linkMode) setLinkMode(c.linkMode);
       }
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,7 +46,7 @@ export default function Envio() {
   }
 
   async function save() {
-    const r = await fetch('/api/integrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'envio_auto', config: { groupJid, autoNovo, linkMode, slot } }) }).then((x) => x.json());
+    const r = await fetch('/api/integrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'envio_auto', config: { groupJid, autoNovo, slot } }) }).then((x) => x.json());
     setMsg(r.ok ?? r.item ? '✅ Salvo!' : `❌ ${r.error || 'Falha ao salvar'}`);
   }
 
@@ -127,12 +125,6 @@ export default function Envio() {
             <p className="hint">Quando ligado, ofertas geradas disparam sozinhas no grupo.</p>
           </div>
         </div>
-        <label className="lbl">Link da mensagem</label>
-        <select className="input" value={linkMode} onChange={(e) => setLinkMode(e.target.value)}>
-          <option value="site">Link do meu site (cliente vê o anúncio aqui primeiro)</option>
-          <option value="original">Link original da plataforma</option>
-        </select>
-        <p className="hint">No site, após entrar na conta, o cliente vê o botão com o link original da plataforma.</p>
         <div className="btn-row">
           <button className="btn btn-primary btn-sm" onClick={save}>💾 Salvar</button>
           <button className="btn btn-test btn-sm" onClick={sendTest}>🚀 Enviar teste</button>

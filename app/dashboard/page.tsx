@@ -7,9 +7,8 @@ type Stats = { plan?: string; postsToday?: number; scheduledPending?: number; se
 const QUICK = [
   { href: '/dashboard/postagens/produtos', icon: '📝', tone: 'green', name: 'Gerar Postagem', desc: 'Crie postagens prontas para compartilhar nas suas redes sociais.' },
   { href: '/dashboard/postagens/copiador', icon: '📑', tone: 'blue', name: 'Modo Copiador', desc: 'Replique ofertas do grupo de origem com o seu link de afiliado.' },
-  { href: '/dashboard/postagens/radar', icon: '📡', tone: 'amber', name: 'Radar Shopee', desc: 'Importe ofertas por palavra-chave direto no seu grupo.', tag: 'NOVO' },
-  { href: '/dashboard/postagens/distribuidor', icon: '🔀', tone: 'blue', name: 'Distribuidor', desc: 'Repasse o que você posta no seu grupo para os demais.', tag: 'NOVO' },
-  { href: '/dashboard/postagens/sorteio', icon: '🎉', tone: 'purple', name: 'Sorteio + Boas-vindas', desc: 'Sorteie membros e receba novatos automaticamente.', tag: 'NOVO' },
+  { href: '/dashboard/postagens/distribuidor', icon: '🔀', tone: 'amber', name: 'Distribuidor', desc: 'Repasse o que você posta no seu grupo para os demais.' },
+  { href: '/dashboard/postagens/sorteio', icon: '🎉', tone: 'purple', name: 'Sorteio + Boas-vindas', desc: 'Sorteie membros e receba novatos automaticamente.' },
 ];
 
 function greeting() {
@@ -44,7 +43,7 @@ export default function Overview() {
           <a className="quick-card" key={q.href} href={q.href}>
             <span className={`quick-ico tone-${q.tone}`}>{q.icon}</span>
             <span className="quick-arrow">↗</span>
-            <h3>{q.name} {q.tag && <span className="badge badge-ok">{q.tag}</span>}</h3>
+            <h3>{q.name}</h3>
             <p>{q.desc}</p>
           </a>
         ))}

@@ -9,7 +9,7 @@ const STORES = [
   { id: 'shein', name: 'SHEIN', desc: 'Seu identificador de afiliado SHEIN.', field: 'ID de afiliado' },
 ];
 
-type Modal = null | { type: 'whatsapp'; slot: 'wa1' | 'wa2' } | { type: 'telegram' } | { type: 'store'; store: string } | { type: 'template' } | { type: 'coupon' } | { type: 'hooks' };
+type Modal = null | { type: 'whatsapp'; slot: 'wa1' | 'wa2' } | { type: 'store'; store: string } | { type: 'template' } | { type: 'coupon' } | { type: 'hooks' };
 
 type WaState = { connected?: boolean; phone?: string; qr?: string | null; qrError?: string };
 
@@ -17,7 +17,6 @@ export default function Robo() {
   const [wa, setWa] = useState<Record<'wa1' | 'wa2', WaState>>({ wa1: {}, wa2: {} });
   const [plan, setPlan] = useState('');
   const [forms, setForms] = useState<Record<string, string>>({});
-  const [tg, setTg] = useState('');
   const [tplStore, setTplStore] = useState('shopee');
   const [tplText, setTplText] = useState('');
   const [tplMap, setTplMap] = useState<Record<string, string>>({});
@@ -52,8 +51,7 @@ export default function Robo() {
     const integ = await fetch('/api/integrations').then((r) => r.json()).catch(() => null);
     const map: Record<string, string> = {};
     for (const it of integ?.items || []) {
-      if (it.provider === 'telegram') setTg((it.config?.botToken as string) || '');
-      else if (it.provider === 'mercadolivre') { setMlMatt((it.config?.mattTool as string) || ''); map[it.provider] = (it.config?.affiliateId as string) || ''; }
+      if (it.provider === 'mercadolivre') { setMlMatt((it.config?.mattTool as string) || ''); map[it.provider] = (it.config?.affiliateId as string) || ''; }
       else if (it.provider === 'mercadolivre_oauth') setMlOk(true);
       else if (it.provider === 'shopee_api') { setShAppId((it.config?.appId as string) || ''); setShSecret((it.config?.secret as string) || ''); }
       else if (it.provider === 'templates') { const m = (it.config || {}) as Record<string, string>; setTplMap(m); setTplText((prev) => prev || m[tplStore] || ''); }
@@ -118,13 +116,6 @@ export default function Robo() {
         <div className="step-cards">
           {waCard('wa1', '1', false)}
           {waCard('wa2', '2', plan !== '' && plan !== 'master')}
-          <div className="chan">
-            <span className="watermark">✈️</span>
-            <div className="chan-top"><span className="chan-ico" style={{ background: '#12294d' }}>✈️</span> Grupos e canais</div>
-            <h3>Telegram</h3>
-            <p>{tg ? 'Bot configurado ✓' : 'Configure seu bot para enviar ofertas aos seus grupos e canais.'}</p>
-            <div className="chan-foot"><button onClick={() => setModal({ type: 'telegram' })}>Configurar bot</button><span>↗</span></div>
-          </div>
         </div>
       </div>
 
@@ -169,12 +160,6 @@ export default function Robo() {
             <p>Organize as próximas publicações nos seus grupos.</p>
             <div className="chan-foot"><a href="/dashboard/postagens">Abrir</a><span>›</span></div>
           </div>
-          <div className="chan">
-            <div className="chan-top"><span className="chan-ico" style={{ background: '#3d1a2e' }}>🖼️</span></div>
-            <h3>Templates de stories</h3>
-            <p>Escolha os modelos e as cores dos seus stories.</p>
-            <div className="chan-foot"><button disabled style={{ opacity: .5 }}>Em breve</button><span>›</span></div>
-          </div>
         </div>
       </div>
 
@@ -192,17 +177,6 @@ export default function Robo() {
                   <button className="btn btn-ghost btn-sm" onClick={load}>Atualizar QR</button>
                   {wa[modal.slot]?.connected && <button className="btn btn-ghost btn-sm" onClick={() => unlink(modal.slot)}>Desvincular</button>}
                   <button className="btn btn-primary btn-sm" onClick={() => setModal(null)}>Fechar</button>
-                </div>
-              </>
-            )}
-            {modal.type === 'telegram' && (
-              <>
-                <h3>✈️ Bot do Telegram</h3>
-                <p className="hint">Cole o token criado no BotFather.</p>
-                <input className="input" value={tg} onChange={(e) => setTg(e.target.value)} placeholder="Token do bot (BotFather)" />
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-primary btn-sm" onClick={() => save('telegram', { botToken: tg })}>{done ? 'Salvo ✓' : 'Salvar'}</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>Fechar</button>
                 </div>
               </>
             )}

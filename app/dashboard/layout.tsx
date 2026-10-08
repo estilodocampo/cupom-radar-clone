@@ -17,20 +17,9 @@ const GROUPS: Group[] = [
     { href: '/dashboard/postagens/produtos', label: '📦 Produtos' },
     { href: '/dashboard/postagens/envio', label: '🚀 Envio automático' },
     { href: '/dashboard/postagens/fila', label: '📋 Modo Fila' },
-    { href: '/dashboard/postagens/lista', label: '📝 Modo Lista', badge: 'NOVO' },
     { href: '/dashboard/postagens/copiador', label: '📑 Modo Copiador' },
-    { href: '/dashboard/postagens/radar', label: '📡 Radar Shopee', badge: 'NOVO' },
-    { href: '/dashboard/postagens/sorteio', label: '🎉 Sorteio + Boas-vindas', badge: 'NOVO' },
-    { href: '/dashboard/postagens/distribuidor', label: '🔀 Distribuidor', badge: 'NOVO' },
-  ]},
-  { label: 'Ferramentas', icon: '🛠️', items: [
-    { href: '/dashboard/ferramentas', label: '🔗 Bio Link Pro' },
-    { href: '/dashboard/ferramentas', label: '🔄 Rotacionador', badge: 'NOVO' },
-    { href: '/dashboard/ferramentas', label: '🎓 Aulas' },
-  ]},
-  { label: 'Crescimento', icon: '📈', items: [
-    { href: '/dashboard/crescimento', label: '📊 Analytics de Grupos', badge: 'NOVO' },
-    { href: '/dashboard/crescimento', label: '🎁 Indique e ganhe', badge: 'NOVO' },
+    { href: '/dashboard/postagens/sorteio', label: '🎉 Sorteio + Boas-vindas' },
+    { href: '/dashboard/postagens/distribuidor', label: '🔀 Distribuidor' },
   ]},
   { label: 'Configurações', icon: '⚙️', items: [
     { href: '/dashboard/config/ajuda', label: '❓ Central de Ajuda' },
