@@ -370,12 +370,13 @@ async function enviadosHoje(c) {
 }
 
 // Aplica os limites de frequência e quantidade diária configurados pelo usuário
-async function passaLimites(c) {
+async function passaLimites(c, pularIntervalo = false) {
   if (c.maxPerDay > 0) {
     const n = await enviadosHoje(c);
     if (n >= c.maxPerDay) return false;
   }
-  if (c.minInterval > 0) {
+  // Post manual seu fura a janela de intervalo (mas conta na cota diária)
+  if (!pularIntervalo && c.minInterval > 0) {
     const last = sentAtByUser.get(limKey(c)) || 0;
     if (Date.now() - last < c.minInterval * 60000) return false;
   }
@@ -470,9 +471,9 @@ async function enfileirar() {
 // Sem fila: se não couber na janela, perde-se (decisão do usuário).
 // A trava anti-duplicata (reserva + marca) continua valendo.
 // Retorna { ok, sent: [{jid, id, participant}] } para o mapa de repasses.
-async function enviarLote(c, targets, text, mediaBuf, mediaType, slot) {
+async function enviarLote(c, targets, text, mediaBuf, mediaType, slot, pularIntervalo = false) {
   if (!targets.length) return { ok: false, sent: [] };
-  if (!(await passaLimites(c))) {
+  if (!(await passaLimites(c, pularIntervalo))) {
     log.info({ kind: c.kind }, 'fora da janela: oferta descartada (sem fila)');
     return { ok: false, sent: [] };
   }
@@ -637,11 +638,11 @@ function temMarca(text) {
 // Fan-out do Distribuidor para os demais grupos (1 janela por mensagem).
 // Marca o que o sistema posta: o eco futuro volta com marca e é ignorado.
 // Registra o mapa hub -> cópias para apagar em cascata quando apagarem no hub.
-async function distribuirAgora(d, out, media, mediaType, hubMsgId, slot) {
+async function distribuirAgora(d, out, media, mediaType, hubMsgId, slot, pularIntervalo = false) {
   if (!temMarca(out)) out = comMarca(out);
   const targets = [...new Set(d.targets)].filter((t) => t !== d.hub);
   if (!targets.length) return false;
-  const res = await enviarLote(d, targets, out, media, mediaType, slot);
+  const res = await enviarLote(d, targets, out, media, mediaType, slot, pularIntervalo);
   if (res.ok && hubMsgId && pool) {
     for (const s of res.sent) {
       await pool.query(
@@ -666,11 +667,14 @@ async function handleDistribuidor(msg, slot) {
     if ((d.slot || 'wa1') !== slot) continue;
     if (d.pausado) continue; // pausa de emergência
     if (d.hub !== remote) continue;
-    const text = extractText(msg);
-    if (!text || !text.trim()) continue;
+    const eManual = !!msg.key.fromMe;
+    const hasImage = !!msg.message?.imageMessage;
+    const hasVideo = !!msg.message?.videoMessage;
+    const text = extractText(msg) || '';
+    if (!text.trim() && !(hasImage || hasVideo)) { log.info({ hub: remote }, 'distribuidor: sem texto nem mídia, ignorada'); continue; }
     if (temMarca(text)) continue; // eco do próprio bot: ignora
-    if (d.onlyMine && !msg.key.fromMe) continue; // só o que saiu do seu número
-    if (d.requireLink && !/https?:\/\//.test(text)) continue;
+    if (d.onlyMine && !msg.key.fromMe) { log.info({ hub: remote }, 'distribuidor: onlyMine e não é sua, ignorada'); continue; }
+    if (d.requireLink && !/https?:\/\//.test(text)) { log.info({ hub: remote }, 'distribuidor: sem link e requireLink ligado, ignorada'); continue; }
     let out = text;
     if (d.convert) {
       const r = await convertTextLinks(text, d.affIds, d.shopeeCreds, d.mlMattTool, d.userId, d.stripCoupons, d.slot);
@@ -678,14 +682,13 @@ async function handleDistribuidor(msg, slot) {
     }
     if (d.prefix) out = `${d.prefix}\n\n${out}`;
     if (d.suffix) out = `${out}\n\n${d.suffix}`;
-    const hasImage = !!msg.message?.imageMessage;
-    const hasVideo = !!msg.message?.videoMessage;
     let media = null;
     if (hasImage || hasVideo) {
       try { media = await downloadMediaMessage(msg, 'buffer', {}); }
       catch (e) { log.warn({ e: String(e).slice(0, 120) }, 'distribuidor midia falhou, enviando so texto'); }
     }
-    await distribuirAgora(d, out, media, hasImage ? 'image' : hasVideo ? 'video' : null, msg.key.id, slot);
+    // Post manual seu fura a janela de intervalo (mas conta na cota e na anti-duplicata)
+    await distribuirAgora(d, out, media, hasImage ? 'image' : hasVideo ? 'video' : null, msg.key.id, slot, eManual);
   }
 }
 

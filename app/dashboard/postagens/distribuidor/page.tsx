@@ -219,6 +219,7 @@ export default function Distribuidor() {
         <p className="hint" style={{ marginTop: 8 }}>
           Trava anti-loop ativa: nunca repassa a partir de um grupo que já recebe, e nunca devolve ao seu hub. O worker aplica em até 60s.
         </p>
+        <p className="hint">✍️ Post manual seu no hub sai na hora (fura a janela de frequência) e conta na cota diária. O motivo de cada descarte aparece no log do worker.</p>
         <p className="hint">🗑️ Apagou no seu grupo? As cópias saem dos demais automaticamente (dentro da janela do WhatsApp, ~2 dias).</p>
       </div>
 
