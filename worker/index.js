@@ -325,7 +325,7 @@ async function loadCopiadores() {
     // Regras de cópia (várias por número): cada uma alimenta o seu hub
     const cop = await pool.query('SELECT id,"userId",name,slot,source,hub,"keepCoupons" FROM "CopiadorRule" WHERE active = true').catch(() => ({ rows: [] }));
     copiadores = cop.rows
-      .filter((r) => r.source && r.hub)
+      .filter((r) => r.source && r.hub && r.source !== r.hub)
       .map((r) => {
         const v = byUser[r.userId] || { affIds: {} };
         return {

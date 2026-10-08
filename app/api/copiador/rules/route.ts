@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
   const hub = String(body.hub || '').trim();
   if (!jidOk(source)) return NextResponse.json({ error: 'Origem inválida.' }, { status: 400 });
   if (!jidOk(hub)) return NextResponse.json({ error: 'Selecione o grupo hub.' }, { status: 400 });
+  if (source === hub) return NextResponse.json({ error: 'Origem e hub não podem ser o mesmo grupo.' }, { status: 400 });
   const data = {
     name: String(body.name || '').slice(0, 60),
     slot: slotOk(String(body.slot || 'wa1')),
