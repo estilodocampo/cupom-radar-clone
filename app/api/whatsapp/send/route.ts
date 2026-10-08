@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/auth';
 import { prisma } from '../../../../lib/prisma';
-import { worker } from '../../../../lib/worker';
+import { worker, normSlot } from '../../../../lib/worker';
 import { getUserPlan } from '../../../../lib/subscription';
 import { PLANS } from '../../../../lib/plans';
 
@@ -14,16 +14,18 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
   const planId = await getUserPlan(user.id).catch(() => 'gratuito' as const);
   const plan = PLANS.find((p) => p.id === planId)!;
-  if (!plan || plan.whatsappNumbers < 1) {
-    return NextResponse.json({ error: 'Seu plano não inclui automação WhatsApp. Faça upgrade.' }, { status: 402 });
+  const body = (await req.json().catch(() => ({}))) as { to?: string; text?: string; slot?: string };
+  const slot = normSlot(body.slot);
+  const need = slot === 'wa2' ? 2 : 1;
+  if (!plan || plan.whatsappNumbers < need) {
+    return NextResponse.json({ error: 'Seu plano não inclui este número. Faça upgrade.' }, { status: 402 });
   }
-  const { to, text } = (await req.json().catch(() => ({}))) as { to?: string; text?: string };
-  if (!to || !text) return NextResponse.json({ error: 'to e text obrigatórios' }, { status: 400 });
+  if (!body.to || !body.text) return NextResponse.json({ error: 'to e text obrigatórios' }, { status: 400 });
   try {
-    await worker.send(to, text);
+    await worker.send(body.to, body.text, slot);
   } catch (e) {
     return NextResponse.json({ error: String(e).slice(0, 300) }, { status: 502 });
   }
-  await prisma.dispatchLog.create({ data: { userId: user.id, groupJid: to, message: text, status: 'sent' } }).catch(() => null);
+  await prisma.dispatchLog.create({ data: { userId: user.id, groupJid: body.to, message: body.text, status: 'sent' } }).catch(() => null);
   return NextResponse.json({ ok: true });
 }

@@ -23,12 +23,14 @@ const DATABASE_URL = process.env.DATABASE_URL || '';
 const log = pino({ level: process.env.LOG_LEVEL || 'info' });
 const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
 
-let sock = null;
-let connected = false;
-let phone = null;
-let qrDataUrl = null;
-let qrUpdatedAt = null;
-let lastError = null;
+const SLOT_LIST = ['wa1', 'wa2'];
+const AUTH_BASE = (process.env.AUTH_DIR || '/data/auth').replace(/\/$/, '');
+function slotDir(slot) { return slot === 'wa2' ? `${AUTH_BASE}_2` : AUTH_BASE; }
+function newConn(slot) {
+  return { slot, sock: null, connected: false, phone: null, qrDataUrl: null, qrUpdatedAt: null, lastError: null };
+}
+const conns = { wa1: newConn('wa1'), wa2: newConn('wa2') };
+function normSlot(s) { return s === 'wa2' ? 'wa2' : 'wa1'; }
 const bootTime = Date.now();
 const seenIds = new Set();
 let copiadores = []; // [{userId, source, targets, affIds, minInterval, maxPerDay}]
@@ -307,7 +309,7 @@ async function loadCopiadores() {
       .filter(([, v]) => v.distribuidor && v.distribuidor.hub && (v.distribuidor.targets || []).length)      .map(([userId, v]) => {
         const c = v.distribuidor;
         return {
-          userId, kind: 'distribuidor', hub: c.hub, targets: c.targets || [],
+          userId, kind: 'distribuidor', slot: c.slot || 'wa1', hub: c.hub, targets: c.targets || [],
           onlyMine: !!c.onlyMine, requireLink: !!c.requireLink, convert: c.convert !== false,
           pausado: !!c.pausado,
           stripCoupons: c.stripCoupons !== false,
@@ -325,6 +327,7 @@ async function loadCopiadores() {
       .map(([userId, v]) => ({
         userId,
         source: v.copiador.source,
+        slot: v.copiador.slot || 'wa1',
         // Destino = seu hub (do Distribuidor); sem Distribuidor, usa os destinos salvos
         targets: hubPorUser[userId] ? [hubPorUser[userId]] : (v.copiador.targets || []),
         keepCoupons: !!v.copiador.keepCoupons,
@@ -335,7 +338,7 @@ async function loadCopiadores() {
     if (copiadores.length) log.info({ n: copiadores.length }, 'copiadores ativos');
     boasvindasCfgs = Object.entries(byUser)
       .filter(([, v]) => v.boasvindas && (v.boasvindas.targets || []).length && v.boasvindas.text)
-      .map(([userId, v]) => ({ userId, targets: v.boasvindas.targets || [], text: String(v.boasvindas.text).slice(0, 500) }));
+      .map(([userId, v]) => ({ userId, slot: v.boasvindas.slot || 'wa1', targets: v.boasvindas.targets || [], text: String(v.boasvindas.text).slice(0, 500) }));
   } catch (e) {
     log.warn({ e: String(e) }, 'load copiadores falhou');
   }
@@ -466,7 +469,7 @@ async function enfileirar() {
 // Sem fila: se não couber na janela, perde-se (decisão do usuário).
 // A trava anti-duplicata (reserva + marca) continua valendo.
 // Retorna { ok, sent: [{jid, id, participant}] } para o mapa de repasses.
-async function enviarLote(c, targets, text, mediaBuf, mediaType) {
+async function enviarLote(c, targets, text, mediaBuf, mediaType, slot) {
   if (!targets.length) return { ok: false, sent: [] };
   if (!(await passaLimites(c))) {
     log.info({ kind: c.kind }, 'fora da janela: oferta descartada (sem fila)');
@@ -481,7 +484,7 @@ async function enviarLote(c, targets, text, mediaBuf, mediaType) {
   const sent = [];
   for (const t of reservados) {
     try {
-      const key = await sendComMidia(t, text, mediaBuf, mediaType);
+      const key = await sendComMidia(t, text, mediaBuf, mediaType, slot);
       await pool.query('UPDATE "QueuedOffer" SET status = $1, "sentAt" = NOW() WHERE "userId" = $2 AND kind = $3 AND fp = $4 AND "targetJid" = $5', ['sent', c.userId, c.kind || 'copiador', ofertaFp(c, text), t]).catch(() => {});
       if (key && key.id) sent.push({ jid: t, id: key.id, participant: key.participant || null });
       ok++;
@@ -493,7 +496,8 @@ async function enviarLote(c, targets, text, mediaBuf, mediaType) {
   return { ok: ok > 0, sent };
 }
 
-async function sendComMidia(targetJid, text, mediaBuf, mediaType) {
+async function sendComMidia(targetJid, text, mediaBuf, mediaType, slot) {
+  const sock = conns[normSlot(slot)].sock;
   const caption = text.length > 1000 ? text.slice(0, 1000) : text;
   const rest = text.length > 1000 ? text.slice(1000) : '';
   let key = null;
@@ -506,7 +510,7 @@ async function sendComMidia(targetJid, text, mediaBuf, mediaType) {
   return key || null;
 }
 
-async function handleCopiador(msg) {
+async function handleCopiador(msg, slot) {
   if (!msg.key || msg.key.fromMe) return;
   const remote = msg.key.remoteJid || '';
   const ts = Number(msg.messageTimestamp) * 1000;
@@ -530,19 +534,21 @@ async function handleCopiador(msg) {
     }
   }
   for (const c of copiadores) {
+    if ((c.slot || 'wa1') !== slot) continue;
     if (c.source !== remote || !c.targets.length) continue;
     const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons);
     if (!converted) continue;
     const mediaType = hasImage ? 'image' : hasVideo ? 'video' : null;
-    const res = await enviarLote(c, c.targets, comMarca(out), media, mediaType);
+    const res = await enviarLote(c, c.targets, comMarca(out), media, mediaType, slot);
     if (!res.ok) continue;
     // Cadeia determinística: o que o Copiador posta num hub dispara o
     // Distribuidor na hora (sem depender do eco do WhatsApp, que duplicava).
     for (const s of res.sent) {
       for (const d of distribuidores) {
         if (d.userId !== c.userId || d.hub !== s.jid || d.pausado) continue;
+        if ((d.slot || 'wa1') !== slot) continue;
         try {
-          await distribuirAgora(d, out, media, mediaType, s.id);
+          await distribuirAgora(d, out, media, mediaType, s.id, slot);
         } catch (e) {
           log.warn(String(e).slice(0, 150));
         }
@@ -553,7 +559,7 @@ async function handleCopiador(msg) {
 
 // Drena a fila respeitando os mesmos limites (nada se perde)
 async function tickQueue() {
-  if (!pool || !connected) return;
+  if (!pool || !conns.wa1.connected) return;
   let rows = [];
   try {
     const r = await pool.query(
@@ -629,11 +635,11 @@ function temMarca(text) {
 // Fan-out do Distribuidor para os demais grupos (1 janela por mensagem).
 // Marca o que o sistema posta: o eco futuro volta com marca e é ignorado.
 // Registra o mapa hub -> cópias para apagar em cascata quando apagarem no hub.
-async function distribuirAgora(d, out, media, mediaType, hubMsgId) {
+async function distribuirAgora(d, out, media, mediaType, hubMsgId, slot) {
   if (!temMarca(out)) out = comMarca(out);
   const targets = [...new Set(d.targets)].filter((t) => t !== d.hub);
   if (!targets.length) return false;
-  const res = await enviarLote(d, targets, out, media, mediaType);
+  const res = await enviarLote(d, targets, out, media, mediaType, slot);
   if (res.ok && hubMsgId && pool) {
     for (const s of res.sent) {
       await pool.query(
@@ -648,13 +654,14 @@ async function distribuirAgora(d, out, media, mediaType, hubMsgId) {
 // Distribuidor: o que você posta no SEU grupo é repassado para os demais.
 // Anti-loop: eco do próprio bot (com marca) nunca redistribui; a cadeia
 // Copiador -> hub é disparada por chamada direta (não depende do eco).
-async function handleDistribuidor(msg) {
+async function handleDistribuidor(msg, slot) {
   if (!msg || !msg.key) return;
   const remote = msg.key.remoteJid || '';
   if (!remote.endsWith('@g.us')) return;
   const ts = Number(msg.messageTimestamp) * 1000;
   if (ts < bootTime) return;
   for (const d of distribuidores) {
+    if ((d.slot || 'wa1') !== slot) continue;
     if (d.pausado) continue; // pausa de emergência
     if (d.hub !== remote) continue;
     const text = extractText(msg);
@@ -676,13 +683,15 @@ async function handleDistribuidor(msg) {
       try { media = await downloadMediaMessage(msg, 'buffer', {}); }
       catch (e) { log.warn({ e: String(e).slice(0, 120) }, 'distribuidor midia falhou, enviando so texto'); }
     }
-    await distribuirAgora(d, out, media, hasImage ? 'image' : hasVideo ? 'video' : null, msg.key.id);
+    await distribuirAgora(d, out, media, hasImage ? 'image' : hasVideo ? 'video' : null, msg.key.id, slot);
   }
 }
 
 // Apagou no hub -> apaga as cópias nos demais grupos (dentro da janela do WhatsApp)
-async function handleApagouNoHub(gid, hubMsgId) {
+async function handleApagouNoHub(gid, hubMsgId, slot) {
+  const sock = conns[normSlot(slot)].sock;
   for (const d of distribuidores) {
+    if ((d.slot || 'wa1') !== normSlot(slot)) continue;
     if (d.hub !== gid) continue;
     let rows = [];
     try {
@@ -736,37 +745,40 @@ async function filaPendente() {
   }
 }
 
-async function connect() {
-  fs.mkdirSync(AUTH_DIR, { recursive: true });
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+async function connectSlot(slot) {
+  const cx = conns[slot];
+  if (!cx) return;
+  fs.mkdirSync(slotDir(slot), { recursive: true });
+  const { state, saveCreds } = await useMultiFileAuthState(slotDir(slot));
   const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 0] }));
-  sock = makeWASocket({ version, auth: state, logger: pino({ level: 'warn' }) });
-  sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('messages.upsert', async ({ messages }) => {
+  cx.sock = makeWASocket({ version, auth: state, logger: pino({ level: 'warn' }) });
+  cx.sock.ev.on('creds.update', saveCreds);
+  cx.sock.ev.on('messages.upsert', async ({ messages }) => {
     for (const m of messages || []) {
-      try { await handleCopiador(m); } catch (e) { log.warn(String(e).slice(0, 200)); }
-      try { await handleDistribuidor(m); } catch (e) { log.warn(String(e).slice(0, 200)); }
+      try { await handleCopiador(m, slot); } catch (e) { log.warn(String(e).slice(0, 200)); }
+      try { await handleDistribuidor(m, slot); } catch (e) { log.warn(String(e).slice(0, 200)); }
     }
   });
   // Apagou mensagem no grupo -> se foi no hub, apaga as cópias nos demais
-  sock.ev.on('messages.delete', async ({ keys }) => {
+  cx.sock.ev.on('messages.delete', async ({ keys }) => {
     try {
       for (const k of keys || []) {
         const gid = k.remoteJid || '';
         if (!gid.endsWith('@g.us') || !k.id) continue;
-        await handleApagouNoHub(gid, k.id);
+        await handleApagouNoHub(gid, k.id, slot);
       }
     } catch (e) {
       log.warn(String(e).slice(0, 200));
     }
   });
-  sock.ev.on('group-participants.update', async ({ id, participants, action }) => {    try {
+  cx.sock.ev.on('group-participants.update', async ({ id, participants, action }) => {    try {
       if (action !== 'add' || !id.endsWith('@g.us')) return;
       for (const b of boasvindasCfgs) {
+        if ((b.slot || 'wa1') !== slot) continue;
         if (!b.targets.includes(id) || !b.text) continue;
         for (const p of participants || []) {
           try {
-            await sock.sendMessage(id, { text: b.text, mentions: [p] });
+            await cx.sock.sendMessage(id, { text: b.text, mentions: [p] });
             await new Promise((r) => setTimeout(r, 1500));
           } catch (e) {
             log.warn({ e: String(e).slice(0, 200) }, 'boasvindas envio falhou');
@@ -777,49 +789,50 @@ async function connect() {
       log.warn(String(e).slice(0, 200));
     }
   });
-  sock.ev.on('connection.update', async (u) => {
+  cx.sock.ev.on('connection.update', async (u) => {
     const { connection, lastDisconnect, qr } = u;
     if (qr) {
-      qrDataUrl = await QRCode.toDataURL(qr).catch(() => null);
-      qrUpdatedAt = new Date().toISOString();
-      connected = false;
+      cx.qrDataUrl = await QRCode.toDataURL(qr).catch(() => null);
+      cx.qrUpdatedAt = new Date().toISOString();
+      cx.connected = false;
     }
     if (connection === 'open') {
-      connected = true;
-      phone = sock?.user?.id?.split(':')[0] || null;
-      qrDataUrl = null;
-      lastError = null;
-      log.info({ phone }, 'whatsapp conectado');
+      cx.connected = true;
+      cx.phone = cx.sock?.user?.id?.split(':')[0] || null;
+      cx.qrDataUrl = null;
+      cx.lastError = null;
+      log.info({ slot, phone: cx.phone }, 'whatsapp conectado');
     }
     if (connection === 'close') {
-      connected = false;
+      cx.connected = false;
       const code = lastDisconnect?.error?.output?.statusCode;
-      lastError = `close:${code}`;
+      cx.lastError = `close:${code}`;
       const loggedOut = code === DisconnectReason.loggedOut;
       if (loggedOut) {
-        fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-        log.warn('sessao encerrada, QR necessario');
+        fs.rmSync(slotDir(slot), { recursive: true, force: true });
+        log.warn({ slot }, 'sessao encerrada, QR necessario');
       }
-      setTimeout(connect, 5000);
+      setTimeout(() => connectSlot(slot), 5000);
     }
   });
 }
 
-async function sendText(to, text) {
-  if (!sock || !connected) throw new Error('whatsapp desconectado');
-  await sock.sendMessage(to, { text, linkPreview: null });
+async function sendText(to, text, slot) {
+  const cx = conns[normSlot(slot)];
+  if (!cx.sock || !cx.connected) throw new Error('whatsapp desconectado');
+  await cx.sock.sendMessage(to, { text, linkPreview: null });
 }
 
 // Indica em quais grupos o usuário pode enviar: é admin (ou não éRestrito)
-const meId = () => (sock?.user?.id || '').split(':')[0];
-const meLid = () => (sock?.user?.lid || '').split('@')[0];
+const meId = (sock) => (sock?.user?.id || '').split(':')[0];
+const meLid = (sock) => (sock?.user?.lid || '').split('@')[0];
 
-function canSendTo(g) {
+function canSendTo(sock, g) {
   if (!g.participants) return true; // sem dados: não bloqueia
   const adm = g.participants.filter((p) => p.admin);
   if (!adm.length) return true;
-  const me = meId();
-  const lid = meLid();
+  const me = meId(sock);
+  const lid = meLid(sock);
   return adm.some((p) => {
     const pn = (p.id || '').split('@')[0].split(':')[0];
     const pl = (p.lid || '').split('@')[0];
@@ -827,13 +840,14 @@ function canSendTo(g) {
   });
 }
 
-async function listGroups() {
-  if (!sock || !connected) return [];
-  const chats = await sock.groupFetchAllParticipating().catch(() => ({}));
+async function listGroups(slot) {
+  const cx = conns[normSlot(slot)];
+  if (!cx.sock || !cx.connected) return [];
+  const chats = await cx.sock.groupFetchAllParticipating().catch(() => ({}));
   return Object.values(chats).map((g) => {
     const total = g.participants ? g.participants.length : null;
     const admins = g.participants ? g.participants.filter((p) => p.admin).length : null;
-    return { id: g.id, name: g.subject, total, admins, canSend: canSendTo(g) };
+    return { id: g.id, name: g.subject, total, admins, canSend: canSendTo(cx.sock, g) };
   });
 }
 
@@ -854,9 +868,9 @@ async function groupsInUse() {
   return [...new Set(out)];
 }
 
-// Scheduler: envia posts agendados vencidos
+// Scheduler: envia posts agendados vencidos (sempre pelo número principal wa1)
 async function tick() {
-  if (!pool || !connected) return;
+  if (!pool || !conns.wa1.connected) return;
   const { rows } = await pool
     .query('SELECT id, "userId", "groupJid", message FROM "ScheduledPost" WHERE status = $1 AND "scheduledAt" <= NOW() ORDER BY "scheduledAt" LIMIT 10', ['pending'])
     .catch((e) => {
@@ -865,7 +879,7 @@ async function tick() {
     });
   for (const r of rows) {
     try {
-      await sendText(r.groupJid, r.message);
+      await sendText(r.groupJid, r.message, 'wa1');
       await pool.query('UPDATE "ScheduledPost" SET status = $1 WHERE id = $2', ['sent', r.id]);
       await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [r.userId, r.groupJid, r.message, 'sent', 'agendado']);
     } catch (e) {
@@ -896,7 +910,7 @@ async function discoverShopeeProducts(keywords, creds) {
 }
 
 async function tickRadar() {
-  if (!pool || !connected) return;
+  if (!pool || !conns.wa1.connected) return;
   let radars = [];
   try {
     const r = await pool.query(
@@ -943,7 +957,7 @@ async function tickRadar() {
         const text = buildShopeePost({ title: item.title, priceFrom: item.priceFrom, priceTo: item.priceTo, link: short });
         for (const t of radar.targetGroups || []) {
           try {
-            await sock.sendMessage(t, { text, linkPreview: null });
+            await conns.wa1.sock.sendMessage(t, { text, linkPreview: null });
             await new Promise((rr) => setTimeout(rr, 1500));
             await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [radar.userId, t, text, 'sent', 'radar']).catch(() => {});
           } catch (e) {
@@ -968,27 +982,39 @@ function readBody(req) {
   });
 }
 
+function slotPayload(slot) {
+  const cx = conns[normSlot(slot)];
+  return { slot: cx.slot, connected: cx.connected, phone: cx.phone, qrUpdatedAt: cx.qrUpdatedAt, lastError: cx.lastError };
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://x');
-  if (url.pathname === '/health') return sendJson(res, 200, { ok: true, connected });
+  const slot = normSlot(url.searchParams.get('slot') || '');
+  if (url.pathname === '/health') return sendJson(res, 200, { ok: true, connected: conns.wa1.connected });
   if (!checkAuth(req)) return sendJson(res, 401, { error: 'unauthorized' });
   if (url.pathname === '/status' && req.method === 'GET') {
-    return sendJson(res, 200, { connected, phone, qrUpdatedAt, lastError, copiadores: copiadores.length, distribuidores: distribuidores.length });
+    return sendJson(res, 200, {
+      ...slotPayload('wa1'),
+      slots: { wa1: slotPayload('wa1'), wa2: slotPayload('wa2') },
+      copiadores: copiadores.length, distribuidores: distribuidores.length,
+    });
   }
   if (url.pathname === '/qr' && req.method === 'GET') {
-    return sendJson(res, 200, { connected, qr: qrDataUrl, updatedAt: qrUpdatedAt });
+    const cx = conns[slot];
+    return sendJson(res, 200, { connected: cx.connected, qr: cx.qrDataUrl, updatedAt: cx.qrUpdatedAt });
   }
   if (url.pathname === '/groups' && req.method === 'GET') {
-    const groups = await listGroups().catch(() => []);
+    const groups = await listGroups(slot).catch(() => []);
     const inUse = new Set(await groupsInUse());
     return sendJson(res, 200, { groups: groups.map((g) => ({ ...g, inUse: inUse.has(g.id) })) });
   }
   if (url.pathname === '/participants' && req.method === 'GET') {
+    const cx = conns[slot];
     const groupJid = url.searchParams.get('groupJid') || '';
     if (!groupJid.endsWith('@g.us')) return sendJson(res, 400, { error: 'groupJid inválido' });
     try {
-      if (!sock || !connected) return sendJson(res, 502, { error: 'whatsapp desconectado' });
-      const meta = await sock.groupMetadata(groupJid);
+      if (!cx.sock || !cx.connected) return sendJson(res, 502, { error: 'whatsapp desconectado' });
+      const meta = await cx.sock.groupMetadata(groupJid);
       const participants = (meta.participants || []).map((p) => ({ id: p.id, admin: p.admin || null }));
       return sendJson(res, 200, { participants });
     } catch (e) {
@@ -999,27 +1025,31 @@ const server = http.createServer(async (req, res) => {
     const body = JSON.parse((await readBody(req)) || '{}');
     if (!body.to || !body.text) return sendJson(res, 400, { error: 'to e text obrigatórios' });
     try {
-      await sendText(body.to, body.text);
+      await sendText(body.to, body.text, normSlot(body.slot));
       return sendJson(res, 200, { ok: true });
     } catch (e) {
       return sendJson(res, 502, { error: String(e).slice(0, 300) });
     }
   }
   if (url.pathname === '/logout' && req.method === 'POST') {
-    try { await sock?.logout().catch(() => {}); } catch { /* ignore */ }
-    sock = null;
-    connected = false;
-    phone = null;
-    qrDataUrl = null;
-    fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-    setTimeout(connect, 2000);
+    const body = JSON.parse((await readBody(req)) || '{}');
+    const lslot = normSlot(body.slot || url.searchParams.get('slot'));
+    const cx = conns[lslot];
+    try { await cx.sock?.logout().catch(() => {}); } catch { /* ignore */ }
+    cx.sock = null;
+    cx.connected = false;
+    cx.phone = null;
+    cx.qrDataUrl = null;
+    fs.rmSync(slotDir(lslot), { recursive: true, force: true });
+    setTimeout(() => connectSlot(lslot), 2000);
     return sendJson(res, 200, { ok: true });
   }
   return sendJson(res, 404, { error: 'not found' });
 });
 
 server.listen(PORT, () => log.info({ PORT }, 'worker http no ar'));
-connect().catch((e) => log.error(String(e)));
+connectSlot('wa1').catch((e) => log.error(String(e)));
+connectSlot('wa2').catch((e) => log.error(String(e)));
 loadCopiadores().catch(() => {});
 setInterval(tick, 15000);
 setInterval(loadCopiadores, 60000);

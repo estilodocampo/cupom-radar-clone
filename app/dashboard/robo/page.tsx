@@ -9,11 +9,13 @@ const STORES = [
   { id: 'shein', name: 'SHEIN', desc: 'Seu identificador de afiliado SHEIN.', field: 'ID de afiliado' },
 ];
 
-type Modal = null | { type: 'whatsapp' } | { type: 'telegram' } | { type: 'store'; store: string } | { type: 'template' } | { type: 'coupon' } | { type: 'hooks' };
+type Modal = null | { type: 'whatsapp'; slot: 'wa1' | 'wa2' } | { type: 'telegram' } | { type: 'store'; store: string } | { type: 'template' } | { type: 'coupon' } | { type: 'hooks' };
+
+type WaState = { connected?: boolean; phone?: string; qr?: string | null; qrError?: string };
 
 export default function Robo() {
-  const [status, setStatus] = useState<{ connected?: boolean; phone?: string } | null>(null);
-  const [qr, setQr] = useState<string | null>(null);
+  const [wa, setWa] = useState<Record<'wa1' | 'wa2', WaState>>({ wa1: {}, wa2: {} });
+  const [plan, setPlan] = useState('');
   const [forms, setForms] = useState<Record<string, string>>({});
   const [tg, setTg] = useState('');
   const [tplStore, setTplStore] = useState('shopee');
@@ -32,11 +34,21 @@ export default function Robo() {
 
   async function load() {
     const s = await fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null);
-    setStatus(s);
-    if (s && !s.connected) {
-      const q = await fetch('/api/whatsapp/qr').then((r) => r.json()).catch(() => null);
-      setQr(q?.qr || null);
-    } else setQr(null);
+    const slots = (s?.slots || {}) as Record<string, { connected?: boolean; phone?: string }>;
+    const next: Record<'wa1' | 'wa2', WaState> = { wa1: {}, wa2: {} };
+    for (const slot of ['wa1', 'wa2'] as const) {
+      const st = slots[slot] || (slot === 'wa1' ? s : null);
+      next[slot] = { connected: st?.connected, phone: st?.phone };
+      if (st && !st.connected) {
+        const q = await fetch(`/api/whatsapp/qr?slot=${slot}`).then((r) => r.json()).catch(() => null);
+        next[slot].qr = q?.qr || null;
+        if (q?.needUpgrade) next[slot].qrError = q.error;
+        else if (q?.error && !q?.qr) next[slot].qrError = q.error;
+      }
+    }
+    setWa(next);
+    const st2 = await fetch('/api/stats').then((r) => r.json()).catch(() => null);
+    if (st2?.plan) setPlan(st2.plan);
     const integ = await fetch('/api/integrations').then((r) => r.json()).catch(() => null);
     const map: Record<string, string> = {};
     for (const it of integ?.items || []) {
@@ -70,6 +82,25 @@ export default function Robo() {
 
   const storeCfg = (id: string) => STORES.find((s) => s.id === id)!;
 
+  async function unlink(slot: 'wa1' | 'wa2') {
+    if (!confirm(`Desvincular o WhatsApp ${slot === 'wa1' ? '1' : '2'}? Será preciso escanear o QR de novo.`)) return;
+    await fetch('/api/whatsapp/unlink', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot }) });
+    setModal(null);
+    load();
+  }
+
+  const waCard = (slot: 'wa1' | 'wa2', n: string, locked: boolean) => (
+    <div className="chan">
+      <span className="watermark">💬</span>
+      <div className="chan-top"><span className="chan-ico" style={{ background: '#12332a' }}>💬</span> Grupos de ofertas</div>
+      <h3>WhatsApp {n}</h3>
+      <p>{locked
+        ? 'Exclusivo do plano Master — faça upgrade para conectar o 2º número.'
+        : wa[slot]?.connected ? `Conectado (${wa[slot].phone || ''}) ✓` : 'Conecte seu número para compartilhar ofertas nos seus grupos.'}</p>
+      <div className="chan-foot"><button onClick={() => { if (locked) { window.location.href = '/dashboard/planos'; return; } setModal({ type: 'whatsapp', slot }); load(); }}>{locked ? 'Ver planos' : 'Gerenciar conexão'}</button><a href="/dashboard/postagens">↗</a></div>
+    </div>
+  );
+
   return (
     <>
       <a className="back" href="/dashboard">← Voltar para o Dashboard</a>
@@ -85,13 +116,8 @@ export default function Robo() {
       <div className="step">
         <div className="step-num">01<span className="step-rule" /><b>Canais de envio</b>O caminho entre suas ofertas e o seu público.<span className="step-cap">💬 Conecte suas conversas</span></div>
         <div className="step-cards">
-          <div className="chan">
-            <span className="watermark">💬</span>
-            <div className="chan-top"><span className="chan-ico" style={{ background: '#12332a' }}>💬</span> Grupos de ofertas</div>
-            <h3>WhatsApp</h3>
-            <p>{status?.connected ? `Conectado (${status.phone || ''}) ✓` : 'Conecte seu número para compartilhar ofertas nos seus grupos.'}</p>
-            <div className="chan-foot"><button onClick={() => { setModal({ type: 'whatsapp' }); load(); }}>Gerenciar conexão</button><a href="/dashboard/postagens">↗</a></div>
-          </div>
+          {waCard('wa1', '1', false)}
+          {waCard('wa2', '2', plan !== '' && plan !== 'master')}
           <div className="chan">
             <span className="watermark">✈️</span>
             <div className="chan-top"><span className="chan-ico" style={{ background: '#12294d' }}>✈️</span> Grupos e canais</div>
@@ -159,11 +185,12 @@ export default function Robo() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             {modal.type === 'whatsapp' && (
               <>
-                <h3>💬 Conectar WhatsApp</h3>
-                <p className="hint">{status?.connected ? `Conectado (${status.phone})` : 'Escaneie o QR com o celular:'}</p>
-                {!status?.connected && qr && <div className="qr-box"><img src={qr} alt="QR WhatsApp" /></div>}
-                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <h3>💬 Conectar WhatsApp {modal.slot === 'wa2' ? '2' : '1'}</h3>
+                <p className="hint">{wa[modal.slot]?.connected ? `Conectado (${wa[modal.slot].phone})` : wa[modal.slot]?.qrError || 'Escaneie o QR com o celular:'}</p>
+                {!wa[modal.slot]?.connected && wa[modal.slot]?.qr && <div className="qr-box"><img src={wa[modal.slot].qr!} alt="QR WhatsApp" /></div>}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                   <button className="btn btn-ghost btn-sm" onClick={load}>Atualizar QR</button>
+                  {wa[modal.slot]?.connected && <button className="btn btn-ghost btn-sm" onClick={() => unlink(modal.slot)}>Desvincular</button>}
                   <button className="btn btn-primary btn-sm" onClick={() => setModal(null)}>Fechar</button>
                 </div>
               </>

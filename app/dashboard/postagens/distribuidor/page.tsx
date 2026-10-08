@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { SlotPicker } from '../SlotPicker';
 
 type Group = { id: string; name: string };
 
@@ -24,6 +25,8 @@ const DEDUP = [
 
 export default function Distribuidor() {
   const [hub, setHub] = useState('');
+  const [slot, setSlot] = useState<'wa1' | 'wa2'>('wa1');
+  const [phones, setPhones] = useState<Record<string, string | undefined>>({});
   const [picked, setPicked] = useState<string[]>([]);
   const [extra, setExtra] = useState('');
   const [onlyMine, setOnlyMine] = useState(false);
@@ -39,16 +42,37 @@ export default function Distribuidor() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [msg, setMsg] = useState('');
 
+  async function loadGroups(sl: 'wa1' | 'wa2') {
+    const g = await fetch(`/api/whatsapp/groups?slot=${sl}`).then((r) => r.json()).catch(() => null);
+    const gl = (g?.groups || []) as Group[];
+    setGroups(gl);
+    return gl;
+  }
+
   useEffect(() => {
+    fetch('/api/whatsapp/status').then((r) => r.json()).then((s) => {
+      const slots = s?.slots || {};
+      const ph: Record<string, string | undefined> = {};
+      for (const k of ['wa1', 'wa2']) if (slots[k]?.phone) ph[k] = slots[k].phone;
+      setPhones(ph);
+    }).catch(() => {});
     Promise.all([
-      fetch('/api/whatsapp/groups').then((r) => r.json()).catch(() => null),
+      loadGroups('wa1'),
       fetch('/api/integrations').then((r) => r.json()).catch(() => null),
-    ]).then(([g, d]) => {
-      const gl = (g?.groups || []) as Group[];
-      setGroups(gl);
+    ]).then(([gl, d]) => {
       const it = (d?.items || []).find((x: { provider: string }) => x.provider === 'distribuidor');
       const c = (it?.config || {}) as Record<string, unknown>;
       const saved = (c.targets as string[]) || [];
+      if ((c.slot as string) === 'wa2') {
+        setSlot('wa2');
+        loadGroups('wa2').then((gl2) => {
+          setPicked(saved.filter((t) => gl2.some((x) => x.id === t)));
+          setExtra(saved.filter((t) => !gl2.some((x) => x.id === t)).join('\n'));
+        });
+      } else {
+        setPicked(saved.filter((t) => gl.some((x) => x.id === t)));
+        setExtra(saved.filter((t) => !gl.some((x) => x.id === t)).join('\n'));
+      }
       setHub((c.hub as string) || '');
       setOnlyMine(!!c.onlyMine);
       setRequireLink(!!c.requireLink);
@@ -78,8 +102,16 @@ export default function Distribuidor() {
   function configAtual(over: Record<string, unknown> = {}) {
     return {
       hub, targets: targetsAtuais(), onlyMine, requireLink, convert, stripCoupons,
-      prefix, suffix, minInterval, maxPerDay, dedupHoras, pausado, ...over,
+      prefix, suffix, minInterval, maxPerDay, dedupHoras, pausado, slot, ...over,
     };
+  }
+
+  function changeSlot(sl: 'wa1' | 'wa2') {
+    setSlot(sl);
+    setHub('');
+    setPicked([]);
+    setExtra('');
+    loadGroups(sl);
   }
 
   async function save() {
@@ -109,6 +141,8 @@ export default function Distribuidor() {
         <div className="dash-section" style={{ marginTop: 0 }}>
           <div className="dash-eyebrow">1 · ENTRADA</div>
         </div>
+        <label className="lbl">Número que distribui</label>
+        <SlotPicker slot={slot} setSlot={changeSlot} phones={phones} />
         <label className="lbl">Seu grupo (hub) — o que você posta aqui é distribuído</label>
         <select className="input" value={hub} onChange={(e) => { setHub(e.target.value); setPicked((p) => p.filter((x) => x !== e.target.value)); }}>
           <option value="">Selecione seu grupo...</option>

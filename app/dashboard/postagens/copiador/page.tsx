@@ -1,13 +1,23 @@
 'use client';
 import { useEffect, useState } from 'react';
 
+import { SlotPicker } from '../SlotPicker';
+
 export default function Copiador() {
   const [source, setSource] = useState('');
   const [keepCoupons, setKeepCoupons] = useState(false);
+  const [slot, setSlot] = useState<'wa1' | 'wa2'>('wa1');
+  const [phones, setPhones] = useState<Record<string, string | undefined>>({});
   const [hub, setHub] = useState('');
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
+    fetch('/api/whatsapp/status').then((r) => r.json()).then((s) => {
+      const slots = s?.slots || {};
+      const ph: Record<string, string | undefined> = {};
+      for (const k of ['wa1', 'wa2']) if (slots[k]?.phone) ph[k] = slots[k].phone;
+      setPhones(ph);
+    }).catch(() => {});
     Promise.all([
       fetch('/api/integrations').then((r) => r.json()).catch(() => null),
       fetch('/api/whatsapp/groups').then((r) => r.json()).catch(() => null),
@@ -16,6 +26,7 @@ export default function Copiador() {
       const cop = items.find((x: { provider: string }) => x.provider === 'copiador');
       setSource((cop?.config?.source as string) || '');
       setKeepCoupons(!!(cop?.config?.keepCoupons as boolean));
+      if ((cop?.config as { slot?: string } | undefined)?.slot === 'wa2') setSlot('wa2');
       const dist = items.find((x: { provider: string }) => x.provider === 'distribuidor');
       const hubId = (dist?.config?.hub as string) || '';
       setHub(hubId);
@@ -30,7 +41,7 @@ export default function Copiador() {
     await fetch('/api/integrations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'copiador', config: { source, keepCoupons } }),
+      body: JSON.stringify({ provider: 'copiador', config: { source, keepCoupons, slot } }),
     });
     setMsg('✅ Copiador salvo! As ofertas da origem chegam convertidas no seu grupo.');
   }
@@ -44,6 +55,8 @@ export default function Copiador() {
       {msg && <p>{msg}</p>}
 
       <div className="card" style={{ maxWidth: 720 }}>
+        <label className="lbl">Número que monitora</label>
+        <SlotPicker slot={slot} setSlot={setSlot} phones={phones} />
         <label className="lbl">Grupo de origem (JID)</label>
         <input className="input" value={source} onChange={(e) => setSource(e.target.value)} placeholder="1203...@g.us" />
         <p className="hint">Cole o JID do grupo de onde copiar. Seu número conectado precisa ser membro dele.</p>

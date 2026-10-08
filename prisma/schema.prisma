@@ -19,7 +19,7 @@ model User {
   sessions      Session[]
   subscription  Subscription?
   usage         PostUsage[]
-  whatsapp      WhatsappConnection?
+  whatsapp      WhatsappConnection[]
   scheduled     ScheduledPost[]
   dispatches    DispatchLog[]
   integrations  Integration[]
@@ -85,11 +85,14 @@ model PostUsage {
 
 model WhatsappConnection {
   id        String   @id @default(cuid())
-  userId    String   @unique
+  userId    String
+  slot      String   @default("wa1")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   status    String   @default("disconnected")
   phone     String?
   updatedAt DateTime @updatedAt
+
+  @@unique([userId, slot])
 }
 
 model ScheduledPost {

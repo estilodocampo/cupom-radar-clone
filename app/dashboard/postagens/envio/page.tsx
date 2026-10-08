@@ -1,53 +1,69 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { SlotPicker, type Slot } from '../SlotPicker';
 
 type Group = { id: string; name: string; total: number | null; admins: number | null; canSend: boolean; inUse?: boolean };
 
 export default function Envio() {
   const [connected, setConnected] = useState(false);
+  const [slot, setSlot] = useState<Slot>('wa1');
+  const [phones, setPhones] = useState<Record<string, string | undefined>>({});
   const [groups, setGroups] = useState<Group[]>([]);
   const [groupJid, setGroupJid] = useState('');
   const [autoNovo, setAutoNovo] = useState(true);
   const [linkMode, setLinkMode] = useState('site');
   const [msg, setMsg] = useState('');
 
-  async function loadGroups() {
+  async function loadGroups(sl: Slot) {
     const s = await fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null);
-    setConnected(Boolean(s?.connected));
-    const g = await fetch('/api/whatsapp/groups').then((r) => r.json()).catch(() => null);
-    setGroups(g?.groups || []);
+    const slots = s?.slots || {};
+    setConnected(Boolean(slots[sl]?.connected ?? s?.connected));
+    const ph: Record<string, string | undefined> = {};
+    for (const k of ['wa1', 'wa2']) if (slots[k]?.phone) ph[k] = slots[k].phone;
+    setPhones(ph);
+    const g = await fetch(`/api/whatsapp/groups?slot=${sl}`).then((r) => r.json()).catch(() => null);
+    const list = g?.groups || [];
+    setGroups(list);
+    setGroupJid((prev) => (list.some((x: Group) => x.id === prev) ? prev : ''));
   }
 
   useEffect(() => {
-    loadGroups();
+    loadGroups(slot);
     fetch('/api/integrations').then((r) => r.json()).then((d) => {
       const it = (d.items || []).find((x: { provider: string }) => x.provider === 'envio_auto');
       if (it?.config) {
-        const c = it.config as { groupJid?: string; autoNovo?: boolean; linkMode?: string };
+        const c = it.config as { groupJid?: string; autoNovo?: boolean; linkMode?: string; slot?: Slot };
+        if (c.slot === 'wa2') { setSlot('wa2'); loadGroups('wa2'); }
         if (c.groupJid) setGroupJid(c.groupJid);
         if (typeof c.autoNovo === 'boolean') setAutoNovo(c.autoNovo);
         if (c.linkMode) setLinkMode(c.linkMode);
       }
     }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function changeSlot(sl: Slot) {
+    setSlot(sl);
+    loadGroups(sl);
+  }
+
   async function save() {
-    const r = await fetch('/api/integrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'envio_auto', config: { groupJid, autoNovo, linkMode } }) }).then((x) => x.json());
+    const r = await fetch('/api/integrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'envio_auto', config: { groupJid, autoNovo, linkMode, slot } }) }).then((x) => x.json());
     setMsg(r.ok ?? r.item ? '✅ Salvo!' : `❌ ${r.error || 'Falha ao salvar'}`);
   }
 
   async function sendTest() {
     if (!groupJid) { setMsg('❌ Selecione o grupo'); return; }
     setMsg('Enviando teste...');
-    const r = await fetch('/api/whatsapp/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: groupJid, text: '✅ Teste do Cupom Radar: envio automático funcionando!' }) }).then((x) => x.json());
+    const r = await fetch('/api/whatsapp/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: groupJid, text: '✅ Teste do Cupom Radar: envio automático funcionando!', slot }) }).then((x) => x.json());
     setMsg(r.ok ? '✅ Teste enviado!' : `❌ ${r.error}`);
   }
 
   async function unlink() {
     if (!confirm('Desvincular o WhatsApp? Será preciso escanear o QR de novo.')) return;
-    const r = await fetch('/api/whatsapp/unlink', { method: 'POST' }).then((x) => x.json());
+    const r = await fetch('/api/whatsapp/unlink', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot }) }).then((x) => x.json());
     setMsg(r.ok ? '✅ Desvinculado' : `❌ ${r.error}`);
-    loadGroups();
+    loadGroups(slot);
   }
 
   const podeEnviar = groups.filter((g) => g.canSend);
@@ -63,6 +79,10 @@ export default function Envio() {
       <div className="card">
         <h3>👥 Meus grupos</h3>
         <p className="hint">Grupos em que o número conectado pode enviar. Ao entrar num grupo novo, ele aparece aqui — use “Recarregar grupos”.</p>
+        <div style={{ marginTop: 8 }}>
+          <label className="lbl">Número</label>
+          <SlotPicker slot={slot} setSlot={changeSlot} phones={phones} />
+        </div>
         {groups.length === 0 ? (
           <p className="hint" style={{ marginTop: 8 }}>{connected ? 'Nenhum grupo encontrado.' : 'Conecte o WhatsApp no Config Robô para listar os grupos.'}</p>
         ) : (
@@ -116,7 +136,7 @@ export default function Envio() {
         <div className="btn-row">
           <button className="btn btn-primary btn-sm" onClick={save}>💾 Salvar</button>
           <button className="btn btn-test btn-sm" onClick={sendTest}>🚀 Enviar teste</button>
-          <button className="btn btn-test btn-sm" onClick={loadGroups}>↻ Recarregar grupos</button>
+          <button className="btn btn-test btn-sm" onClick={() => loadGroups(slot)}>↻ Recarregar grupos</button>
           <button className="btn btn-danger btn-sm" onClick={unlink}>🔌 Desvincular</button>
         </div>
         {msg && <p>{msg}</p>}
