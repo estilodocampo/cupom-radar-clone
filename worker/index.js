@@ -860,10 +860,16 @@ async function groupsInUse() {
     const { rows } = await pool.query('SELECT provider, config FROM "Integration"');
     for (const r of rows) {
       const c = r.config || {};
-      if (r.provider === 'copiador') out.push(...(c.targets || []));
-      else if (r.provider === 'envio_auto' && c.groupJid) out.push(c.groupJid);
+      if (r.provider === 'envio_auto' && c.groupJid) out.push(c.groupJid);
       else if (r.provider === 'boasvindas') out.push(...(c.targets || []));
       else if (r.provider === 'lista_envio') out.push(...((c.groups || []).map((g) => g.id).filter(Boolean)));
+    }
+    const cop = await pool.query('SELECT hub FROM "CopiadorRule"').catch(() => ({ rows: [] }));
+    for (const r of cop.rows) if (r.hub) out.push(r.hub);
+    const dist = await pool.query('SELECT hub, targets FROM "DistribuidorRule"').catch(() => ({ rows: [] }));
+    for (const r of dist.rows) {
+      if (r.hub) out.push(r.hub);
+      out.push(...(r.targets || []));
     }
   } catch { /* ignora */ }
   return [...new Set(out)];
