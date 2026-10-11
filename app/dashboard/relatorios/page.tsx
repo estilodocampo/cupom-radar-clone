@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Empty from '../Empty';
 
 interface Disp { id: string; groupJid: string; status: string; sentAt: string; error: string | null }
 interface LinkStat { code: string; clicks: number; slot: string; url: string }
@@ -27,7 +28,7 @@ export default function Relatorios() {
       </div>
       <div className="card" style={{ marginTop: 16 }}>
         <h3>📱 Cliques por número</h3>
-        {bySlot.length === 0 ? <p className="hint">Nenhum clique ainda.</p> : (
+        {bySlot.length === 0 ? <Empty icon="👆" text="Compartilhe sua primeira oferta para ver os cliques por número." actionLabel="Gerar oferta" actionHref="/dashboard/postagens/produtos" /> : (
           <div className="grid grid-4">
             {bySlot.map((b) => (
               <div className="card" key={b.slot}>
@@ -41,7 +42,7 @@ export default function Relatorios() {
       </div>
       <div className="card" style={{ marginTop: 16 }}>
         <h3>🔝 Links mais clicados</h3>
-        {top.length === 0 ? <p className="hint">Nenhum link ainda.</p> : (
+        {top.length === 0 ? <Empty icon="🔗" text="Seus links encurtados aparecem aqui ranked por cliques." actionLabel="Gerar oferta" actionHref="/dashboard/postagens/produtos" /> : (
           <ul className="list">{top.map((l) => (
             <li key={l.code}><b>/r/{l.code}</b> <span className="badge">📱 {l.slot === 'wa2' ? '2' : '1'}</span> — {l.clicks} cliques<br /><span className="hint">{l.url}</span></li>
           ))}</ul>
@@ -49,7 +50,7 @@ export default function Relatorios() {
       </div>
       <div className="card" style={{ marginTop: 16 }}>
         <h3>Últimos disparos</h3>
-        {logs.length === 0 ? <p className="hint">Nenhum disparo ainda.</p> : (
+        {logs.length === 0 ? <Empty icon="📤" text="Os disparos enviados pelo robô aparecem aqui." actionLabel="Configurar envios" actionHref="/dashboard/postagens/envio" /> : (
           <ul className="list">{logs.map((l) => <li key={l.id}><b>{new Date(l.sentAt).toLocaleString()}</b> — {l.groupJid} — <span className={`badge ${l.status === 'sent' ? 'badge-ok' : 'badge-err'}`}>{l.status}</span></li>)}</ul>
         )}
       </div>

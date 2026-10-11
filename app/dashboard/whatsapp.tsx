@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Empty from './Empty';
 
 interface Group { id: string; name: string }
 interface Sched { id: string; groupName: string | null; groupJid: string; message: string; scheduledAt: string; status: string }
@@ -82,14 +83,14 @@ export default function Whatsapp() {
 
       <div className="card">
         <h3>⏰ Agendados</h3>
-        {sched.length === 0 ? <p className="hint">Nenhum agendamento.</p> : (
+        {sched.length === 0 ? <Empty icon="⏰" text="Agende uma oferta acima para vê-la aqui antes do disparo." /> : (
           <ul className="list">{sched.map((s) => <li key={s.id}><b>{new Date(s.scheduledAt).toLocaleString()}</b> — {s.groupName || s.groupJid} — <span className="badge badge-info">{s.status}</span></li>)}</ul>
         )}
       </div>
 
       <div className="card">
         <h3>📜 Histórico de disparos</h3>
-        {logs.length === 0 ? <p className="hint">Nenhum disparo ainda.</p> : (
+        {logs.length === 0 ? <Empty icon="📜" text="Envie a primeira oferta para ver o histórico aqui." /> : (
           <ul className="list">{logs.map((l) => <li key={l.id}><b>{new Date(l.sentAt).toLocaleString()}</b> — {l.groupJid} — <span className={`badge ${l.status === 'sent' ? 'badge-ok' : 'badge-err'}`}>{l.status}</span>{l.error ? ` (${l.error})` : ''}</li>)}</ul>
         )}
       </div>

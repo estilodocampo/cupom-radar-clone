@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { SlotPicker } from '../SlotPicker';
+import Empty from '../../Empty';
 
 type Group = { id: string; name: string };
 type Rule = {
@@ -224,7 +225,7 @@ export default function Distribuidor() {
       </div>
 
       <div style={{ marginTop: 16, maxWidth: 720 }}>
-        {mine.length === 0 && <p className="hint">Nenhuma regra neste número ainda.</p>}
+        {mine.length === 0 && <Empty icon="🔀" text="Crie a primeira regra acima para distribuir deste número." actionLabel="Criar regra" onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />}
         {mine.map((r) => (
           <div className="card" key={r.id} style={{ marginBottom: 8 }}>
             <b>{r.name || 'Distribuição'}</b> {r.pausado ? <span className="badge badge-err">PAUSADO</span> : <span className="badge badge-ok">ATIVO</span>}

@@ -149,6 +149,14 @@ body.light .topbar-app { background: rgba(241,245,250,.92); }
   margin-left: auto; flex-shrink: 0; background: #12294d; color: #93c5fd; border: 1px solid #274b7a;
   border-radius: 999px; padding: 5px 13px; font-size: 12px; font-weight: 700; text-decoration: none; text-transform: capitalize;
 }
+.crumbs { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; }
+.crumbs a { color: var(--muted); text-decoration: none; }
+.crumbs a:hover { color: var(--green); }
+.crumbs .cur { color: var(--text); font-weight: 700; font-size: 15px; }
+.empty { border: 1px dashed var(--border); border-radius: 12px; padding: 20px 16px; text-align: center; background: var(--bg2); }
+.empty-ico { font-size: 28px; }
+.empty p { color: var(--muted); font-size: 13.5px; margin: 8px 0 12px; }
+.empty p b { color: var(--text); }
 
 /* ===== Barra inferior (mobile/tablet) ===== */
 .tabbar { display: none; }

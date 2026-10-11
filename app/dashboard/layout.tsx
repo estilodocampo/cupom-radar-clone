@@ -70,6 +70,17 @@ function labelFor(path: string) {
   return 'Painel';
 }
 
+function crumbs(path: string): { label: string; href: string | null }[] {
+  const segs = path.split('/').filter(Boolean);
+  const out: { label: string; href: string | null }[] = [];
+  let acc = '';
+  for (const s of segs) {
+    acc += '/' + s;
+    out.push({ label: labelFor(acc), href: acc });
+  }
+  return out.map((c, i) => (i === out.length - 1 ? { ...c, href: null } : c));
+}
+
 function initials(name?: string | null, email?: string | null) {
   return (name || email || 'U').slice(0, 2).toUpperCase();
 }
@@ -158,7 +169,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <button className="mob-menu" aria-label="Abrir menu" aria-expanded={mobOpen} onClick={() => setMobOpen(true)}>☰</button>
           <div className="topbar-hello">
             <small>{greeting()}, {first}</small>
-            <b>{labelFor(path)}</b>
+            <nav className="crumbs" aria-label="Você está aqui">
+              {crumbs(path).map((c, i) => (
+                <span key={`${c.href || 'cur'}-${i}`}>
+                  {i > 0 && <span aria-hidden> › </span>}
+                  {c.href ? <a href={c.href}>{c.label}</a> : <span className="cur">{c.label}</span>}
+                </span>
+              ))}
+            </nav>
           </div>
           {plan && <a className="topbar-plan" href="/dashboard/planos">💎 {plan}</a>}
         </header>

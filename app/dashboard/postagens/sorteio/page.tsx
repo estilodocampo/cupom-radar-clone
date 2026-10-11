@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { SlotPicker } from '../SlotPicker';
+import Empty from '../../Empty';
 
 type Group = { id: string; name: string };
 type Member = { id: string; admin: string | null };
@@ -115,6 +116,7 @@ export default function Sorteio() {
           <option value="">Selecione...</option>
           {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
+        {groups.length === 0 && <Empty icon="👥" text="Conecte o WhatsApp e entre em grupos com este número para sortear." actionLabel="Conectar WhatsApp" actionHref="/dashboard/robo" />}
         {groupJid && <p className="hint">{members.length} membros carregados.</p>}
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={draw}>🎲 Sortear</button>

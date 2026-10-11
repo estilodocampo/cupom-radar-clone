@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Empty from '../../Empty';
 
 type Group = { id: string; name: string };
 type Radar = {
@@ -151,6 +152,7 @@ export default function Radar() {
       </div>
 
       <div style={{ marginTop: 16, maxWidth: 720 }}>
+        {radars.length === 0 && <Empty icon="📡" text="Crie o primeiro radar acima para importar ofertas por palavra-chave." actionLabel="Criar radar" onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />}
         {radars.map((r) => (
           <div className="card" key={r.id} style={{ marginBottom: 8 }}>
             <b>{r.name}</b> {r.active ? <span className="badge badge-ok">ativo</span> : <span className="badge">pausado</span>}

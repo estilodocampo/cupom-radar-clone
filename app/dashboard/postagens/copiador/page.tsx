@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { SlotPicker } from '../SlotPicker';
+import Empty from '../../Empty';
 
 type Group = { id: string; name: string };
 type Rule = { id: string; name: string; slot: string; source: string; hub: string; keepCoupons: boolean; active: boolean };
@@ -116,7 +117,7 @@ export default function Copiador() {
       </div>
 
       <div style={{ marginTop: 16, maxWidth: 720 }}>
-        {mine.length === 0 && <p className="hint">Nenhuma regra neste número ainda.</p>}
+        {mine.length === 0 && <Empty icon="📑" text="Crie a primeira regra acima para começar a copiar ofertas neste número." actionLabel="Criar regra" onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />}
         {mine.map((r) => (
           <div className="card" key={r.id} style={{ marginBottom: 8 }}>
             <b>{r.name || 'Cópia'}</b> {r.active ? <span className="badge badge-ok">ativa</span> : <span className="badge">pausada</span>}

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { SlotPicker, type Slot } from '../SlotPicker';
+import Empty from '../../Empty';
 
 type Group = { id: string; name: string; total: number | null; admins: number | null; canSend: boolean; inUse?: boolean };
 
@@ -82,7 +83,14 @@ export default function Envio() {
           <SlotPicker slot={slot} setSlot={changeSlot} phones={phones} />
         </div>
         {groups.length === 0 ? (
-          <p className="hint" style={{ marginTop: 8 }}>{connected ? 'Nenhum grupo encontrado.' : 'Conecte o WhatsApp no Config Robô para listar os grupos.'}</p>
+          <div style={{ marginTop: 8 }}>
+            <Empty
+              icon="👥"
+              text={connected ? 'Este número ainda não está em nenhum grupo. Entre em um grupo com ele primeiro.' : 'Conecte o WhatsApp para ver seus grupos aqui.'}
+              actionLabel={connected ? undefined : 'Conectar WhatsApp'}
+              actionHref={connected ? undefined : '/dashboard/robo'}
+            />
+          </div>
         ) : (
           <div className="glist" style={{ marginTop: 10 }}>
             {podeEnviar.map((g) => (
