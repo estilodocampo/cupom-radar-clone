@@ -218,7 +218,7 @@ export default function Robo() {
             {modal.type === 'template' && (
               <>
                 <h3>💬 Mensagem personalizada</h3>
-                <p className="hint">Use {'{titulo} {preco} {link} {cupom}'}.</p>
+                <p className="hint">Use {'{titulo} {preco} {link} {link2} {cupom}'}.</p>
                 <select className="input" value={tplStore} onChange={(e) => { setTplStore(e.target.value); setTplText(tplMap[e.target.value] || ''); }}>
                   {STORES.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>

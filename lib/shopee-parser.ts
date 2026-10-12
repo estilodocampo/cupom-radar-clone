@@ -158,14 +158,14 @@ export async function resolveMlShowcase(showcaseUrl: string, hints: string[], ti
   }
 }
 
-const TEMPLATES: Record<string, (p: { title: string; priceFrom?: string; priceTo: string; link: string; coupon?: string }) => string> = {
-  shopee: ({ title, priceFrom, priceTo, link, coupon }) =>
-    `🔥 OFERTA SHOPEE 🔥\n\n📌 ${title}\n${priceFrom ? `❌ De: ${priceFrom}\n` : ''}✅ Por: ${priceTo}\n${coupon ? `🎟️ Cupom: ${coupon}\n` : ''}\n👉 ${link}\n\n⚠️ Estoque limitado!`,
-  default: ({ title, priceTo, link, coupon }) =>
-    `🛒 OFERTA IMPERDÍVEL\n\n📌 ${title}\n✅ Por: ${priceTo}\n${coupon ? `🎟️ Cupom: ${coupon}\n` : ''}\n👉 ${link}`,
+const TEMPLATES: Record<string, (p: { title: string; priceFrom?: string; priceTo: string; link: string; coupon?: string; link2?: string }) => string> = {
+  shopee: ({ title, priceFrom, priceTo, link, coupon, link2 }) =>
+    `🔥 OFERTA SHOPEE 🔥\n\n📌 ${title}\n${priceFrom ? `❌ De: ${priceFrom}\n` : ''}✅ Por: ${priceTo}\n${coupon ? `🎟️ Cupom: ${coupon}\n` : ''}\n👉 ${link}${link2 ? `\n🔗 Link extra: ${link2}` : ''}\n\n⚠️ Estoque limitado!`,
+  default: ({ title, priceTo, link, coupon, link2 }) =>
+    `🛒 OFERTA IMPERDÍVEL\n\n📌 ${title}\n✅ Por: ${priceTo}\n${coupon ? `🎟️ Cupom: ${coupon}\n` : ''}\n👉 ${link}${link2 ? `\n🔗 Link extra: ${link2}` : ''}`,
 };
 
-export function buildPost(store: Store, data: { title: string; priceFrom?: string; priceTo: string; link: string; coupon?: string }) {
+export function buildPost(store: Store, data: { title: string; priceFrom?: string; priceTo: string; link: string; coupon?: string; link2?: string }) {
   const fn = TEMPLATES[store] || TEMPLATES.default;
   return fn(data);
 }

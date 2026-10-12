@@ -7,7 +7,7 @@ import { checkPostLimit, incrementPostUsage } from '../../../lib/subscription';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  let { url, title, priceFrom, priceTo, coupon, affiliateId = 'SEU_ID', slot } = body;
+  let { url, title, priceFrom, priceTo, coupon, affiliateId = 'SEU_ID', slot, extraUrl } = body;
   if (!url || !title || !priceTo) {
     return NextResponse.json({ error: 'url, title, priceTo obrigatórios' }, { status: 400 });
   }
@@ -53,36 +53,49 @@ export async function POST(req: NextRequest) {
     if (hcfg?.items?.length) hook = hcfg.items[Math.floor(Math.random() * hcfg.items.length)];
   }
   let convertedVia: 'api' | 'tag' = 'tag';
-  let short: string | null = null;
+  let shopeeCreds: { appId: string; secret: string } | null = null;
   if (store === 'shopee' && userId) {
-    // Conversão oficial via API (gera shope.ee comissionável)
+    // Credenciais da API oficial (gera shope.ee comissionável)
     const api = await prisma.integration.findUnique({ where: { userId_provider: { userId, provider: 'shopee_api' } } }).catch(() => null);
     const acfg = api?.config as { appId?: string; secret?: string } | null;
-    if (acfg?.appId && acfg?.secret) {
+    if (acfg?.appId && acfg?.secret) shopeeCreds = { appId: acfg.appId, secret: acfg.secret };
+  }
+
+  // Converte qualquer URL com o afiliado do usuário (loja detectada + encurtador próprio)
+  async function convertLink(rawUrl: string, titleHint: string): Promise<{ link: string; via: 'api' | 'tag' }> {
+    const expanded = await expandUrl(rawUrl);
+    const st = detectStore(expanded);
+    if (st === 'shopee' && shopeeCreds && userId) {
       try {
         const { shopeeShortLink } = await import('../../../lib/shopee');
-        short = await shopeeShortLink(url.split('?')[0], ['cupomradar'], { appId: acfg.appId, secret: acfg.secret });
-        convertedVia = 'api';
+        const out = await shopeeShortLink(expanded.split('?')[0], ['cupomradar'], shopeeCreds);
+        return { link: out, via: 'api' as const };
       } catch {
         // cai para o modo tag
       }
     }
+    // Se colaram vitrine (/social/), tenta resolver para a página do anúncio:
+    // 1) produtos na própria vitrine  2) busca externa gratuita  3) mantém vitrine com rastreio.
+    let base = expanded;
+    if (st === 'mercadolivre' && /\/social\//.test(expanded)) {
+      base = (await resolveMlShowcase(expanded, [titleHint]).catch(() => null))
+        || (await resolveMlDdg([titleHint]).catch(() => null))
+        || expanded;
+    }
+    const aff0 = (st === 'mercadolivre' && affId !== 'SEU_ID')
+      ? toMlAffiliateLink(base, affId, mlMattTool)
+      : toAffiliateLink(expanded, affId, st);
+    const { shortenUrl } = await import('../../../lib/shorten');
+    return { link: await shortenUrl(aff0, userId, slot), via: 'tag' as const };
   }
-  // Se colaram vitrine (/social/), tenta resolver para a página do anúncio:
-  // 1) produtos na própria vitrine  2) busca externa gratuita  3) mantém vitrine com rastreio.
-  let mlBase = url;
-  if (store === 'mercadolivre' && /\/social\//.test(url)) {
-    mlBase = (await resolveMlShowcase(url, [title]).catch(() => null))
-      || (await resolveMlDdg([title]).catch(() => null))
-      || url;
+
+  const main = await convertLink(url, title);
+  const affLink = main.link;
+  convertedVia = main.via;
+  let extraLink: string | null = null;
+  if (extraUrl && String(extraUrl).trim()) {
+    extraLink = (await convertLink(String(extraUrl).trim(), title)).link;
   }
-  const affLink0 =
-    short ||
-    (store === 'mercadolivre' && affId !== 'SEU_ID'
-      ? toMlAffiliateLink(mlBase, affId, mlMattTool)
-      : toAffiliateLink(url, affId, store));
-  const { shortenUrl } = await import('../../../lib/shorten');
-  const affLink = await shortenUrl(affLink0, userId, slot);
   let text: string;
   if (template) {
     text = template
@@ -90,9 +103,10 @@ export async function POST(req: NextRequest) {
       .replaceAll('{preco}', priceTo)
       .replaceAll('{precoDe}', priceFrom || '')
       .replaceAll('{link}', affLink)
+      .replaceAll('{link2}', extraLink || '')
       .replaceAll('{cupom}', finalCoupon || '');
   } else {
-    text = buildPost(store, { title, priceFrom, priceTo, link: affLink, coupon: finalCoupon });
+    text = buildPost(store, { title, priceFrom, priceTo, link: affLink, coupon: finalCoupon, link2: extraLink || undefined });
   }
   if (hook) text = `${hook}\n\n${text}`;
   let autoSent = false;
@@ -110,5 +124,5 @@ export async function POST(req: NextRequest) {
       }
     }
   }
-  return NextResponse.json({ store, affiliateLink: affLink, text, autoSent, convertedVia, warning: affId === 'SEU_ID' ? 'Você não está logado ou não salvou seu ID desta loja — link sem rastreio.' : null });
+  return NextResponse.json({ store, affiliateLink: affLink, extraLink, text, autoSent, convertedVia, warning: affId === 'SEU_ID' ? 'Você não está logado ou não salvou seu ID desta loja — link sem rastreio.' : null });
 }
