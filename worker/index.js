@@ -349,6 +349,22 @@ function extractText(msg) {
   return m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || null;
 }
 
+// Baixa mídia com reupload automático pelo número certo.
+// Sem ctx, URLs de CDN expiradas (410/404) falham em silêncio e a oferta sai só texto.
+async function baixarMidia(msg, slot, onde) {
+  const sl = normSlot(slot);
+  const sock = conns[sl].sock;
+  try {
+    return await downloadMediaMessage(msg, 'buffer', {}, {
+      logger: log,
+      reuploadRequest: (m) => sock.updateMediaMessage(m),
+    });
+  } catch (e) {
+    log.warn({ slot: sl, e: String(e).slice(0, 120) }, `${onde} midia falhou, enviando só texto`);
+    return null;
+  }
+}
+
 // Chave de contagem: separa por usuário, tipo e REGRA (várias regras por número)
 function limKey(c) { return `${c.userId}:${c.kind || 'copiador'}:${c.ruleId || ''}`; }
 
@@ -524,11 +540,7 @@ async function handleCopiador(msg, slot) {
   const hasVideo = !!msg.message?.videoMessage;
   let media = null;
   if (hasImage || hasVideo) {
-    try {
-      media = await downloadMediaMessage(msg, 'buffer', {});
-    } catch (e) {
-      log.warn({ e: String(e).slice(0, 120) }, 'copiador midia falhou, enviando só texto');
-    }
+    media = await baixarMidia(msg, slot, 'copiador');
   }
   for (const c of copiadores) {
     if ((c.slot || 'wa1') !== slot) continue;
@@ -613,8 +625,7 @@ async function handleDistribuidor(msg, slot) {
     if (d.suffix) out = `${out}\n\n${d.suffix}`;
     let media = null;
     if (hasImage || hasVideo) {
-      try { media = await downloadMediaMessage(msg, 'buffer', {}); }
-      catch (e) { log.warn({ e: String(e).slice(0, 120) }, 'distribuidor midia falhou, enviando so texto'); }
+      media = await baixarMidia(msg, slot, 'distribuidor');
     }
     // Post manual seu fura a janela de intervalo (mas conta na cota e na anti-duplicata)
     await distribuirAgora(d, out, media, hasImage ? 'image' : hasVideo ? 'video' : null, msg.key.id, slot, eManual);
