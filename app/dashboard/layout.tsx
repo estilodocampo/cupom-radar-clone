@@ -15,15 +15,14 @@ const TOP: Item[] = [
 const GROUPS: Group[] = [
   { label: 'Postagens', icon: '✉️', items: [
     { href: '/dashboard/postagens/produtos', label: '📦 Produtos' },
+    { href: '/dashboard/postagens/copiador', label: '📑 Modo Copiador' },
+    { href: '/dashboard/postagens/distribuidor', label: '🔀 Distribuidor' },
     { href: '/dashboard/postagens/envio', label: '🚀 Envio automático' },
     { href: '/dashboard/postagens/fila', label: '📋 Modo Fila' },
-    { href: '/dashboard/postagens/copiador', label: '📑 Modo Copiador' },
     { href: '/dashboard/postagens/sorteio', label: '🎉 Sorteio + Boas-vindas' },
-    { href: '/dashboard/postagens/distribuidor', label: '🔀 Distribuidor' },
   ]},
   { label: 'Configurações', icon: '⚙️', items: [
     { href: '/dashboard/config/ajuda', label: '❓ Central de Ajuda' },
-    { href: '/dashboard/config/suporte-ia', label: '✨ Suporte IA' },
     { href: '/dashboard/config/dados', label: '👤 Seus Dados' },
     { href: '/dashboard/config/feedback', label: '💭 Enviar Feedback' },
   ]},
@@ -37,16 +36,12 @@ const LABELS: [string, string][] = [
   ['/dashboard/postagens/sorteio', 'Sorteio + Boas-vindas'],
   ['/dashboard/postagens/envio', 'Envio automático'],
   ['/dashboard/postagens/fila', 'Modo Fila'],
-  ['/dashboard/postagens/lista', 'Modo Lista'],
   ['/dashboard/postagens', 'Postagens'],
   ['/dashboard/robo', 'Config Robô'],
   ['/dashboard/planos', 'Planos'],
   ['/dashboard/relatorios', 'Relatórios'],
-  ['/dashboard/ferramentas', 'Ferramentas'],
-  ['/dashboard/crescimento', 'Crescimento'],
   ['/dashboard/config/dados', 'Seus Dados'],
   ['/dashboard/config/ajuda', 'Central de Ajuda'],
-  ['/dashboard/config/suporte-ia', 'Suporte IA'],
   ['/dashboard/config/feedback', 'Enviar Feedback'],
   ['/dashboard', 'Visão geral'],
 ];
@@ -113,6 +108,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => document.body.classList.remove('mob-open');
   }, [mobOpen]);
 
+  const [pwaPrompt, setPwaPrompt] = useState<{ prompt: () => void } | null>(null);
+
+  React.useEffect(() => {
+    const onBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setPwaPrompt(e as unknown as { prompt: () => void });
+    };
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+  }, []);
+
+  async function installApp(e: React.MouseEvent) {
+    e.preventDefault();
+    if (pwaPrompt) {
+      pwaPrompt.prompt();
+      setPwaPrompt(null);
+    } else {
+      alert('Para instalar: no Android, menu ⋮ → "Instalar app". No iPhone, Compartilhar → "Adicionar à Tela de Início".');
+    }
+  }
+
   function toggleTheme() {
     const next = !light;
     setLight(next);
@@ -154,7 +170,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
         <div style={{ marginTop: 'auto', paddingTop: 12, display: 'grid', gap: 8 }}>
           <a className="btn btn-primary btn-sm" style={{ textAlign: 'center' }} href="https://wa.me/5548996911387" target="_blank" rel="noreferrer">💬 Falar com Suporte</a>
-          <a className="nav-item" href="#" onClick={(e) => { e.preventDefault(); alert('App mobile em breve!'); }}>📲 Baixar App</a>
+          <a className="nav-item" href="#" onClick={installApp}>📲 Baixar App</a>
           <button className="nav-item" style={{ width: '100%', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left' }} onClick={toggleTheme}>{light ? '🌙 Modo escuro' : '☀️ Modo claro'}</button>
           {session?.user ? (
             <button className="nav-item" style={{ width: '100%', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left' }} onClick={() => signOut({ callbackUrl: '/' })}>🚪 Sair</button>
@@ -197,7 +213,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
       </div>
 
-      <button className="help-fab">💬 Precisa de ajuda?</button>
+      <a className="help-fab" style={{ textDecoration: 'none' }} href="/dashboard/config/ajuda">💬 Precisa de ajuda?</a>
     </div>
   );
 }

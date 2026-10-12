@@ -34,7 +34,3 @@ export const worker = {
   logout: (slot: WaSlot = 'wa1') =>
     call('/logout', { method: 'POST', body: JSON.stringify({ slot }) }),
 };
-
-export function workerConfigured() {
-  return Boolean(process.env.WORKER_URL || process.env.WORKER_TOKEN);
-}

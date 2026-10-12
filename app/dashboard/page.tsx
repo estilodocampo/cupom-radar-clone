@@ -65,7 +65,7 @@ export default function Overview() {
         <h2 className="dash-h2">Continue configurando</h2>
       </div>
       <div className="grid grid-3">
-        <a className="card" href="/dashboard/robo"><div className="feat">🤖</div><h3>Configure o robô</h3><p className="hint">Conecte WhatsApp, Telegram e suas lojas.</p></a>
+        <a className="card" href="/dashboard/robo"><div className="feat">🤖</div><h3>Configure o robô</h3><p className="hint">Conecte o WhatsApp e suas lojas de afiliado.</p></a>
         <a className="card" href="/dashboard/postagens/envio"><div className="feat">🚀</div><h3>Envio automático</h3><p className="hint">Defina o grupo padrão e dispare sozinho.</p></a>
         <a className="card" href="/dashboard/relatorios"><div className="feat">📊</div><h3>Relatórios</h3><p className="hint">Acompanhe cliques e disparos enviados.</p></a>
       </div>

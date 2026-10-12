@@ -37,16 +37,6 @@ export async function expandUrl(url: string, timeoutMs = 8000): Promise<string> 
   }
 }
 
-export function extractShortId(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const parts = parsed.pathname.split('/').filter(Boolean);
-    return parts.slice(-1)[0]?.slice(0, 32) || 'oferta';
-  } catch {
-    return 'oferta';
-  }
-}
-
 // Converte link original para link de afiliado preservando os parâmetros
 // originais e trocando SÓ o rastreio (remove o da origem).
 function mergeTracking(originalUrl: string, params: Record<string, string>): string {

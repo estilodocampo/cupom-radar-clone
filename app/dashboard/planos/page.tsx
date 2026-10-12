@@ -2,9 +2,9 @@
 import { useState } from 'react';
 
 const PLANS = [
-  { id: 'premium', name: 'Premium', price: 'R$ 159,90/ano', desc: 'Para colocar sua divulgação no automático.', feats: ['Posts ilimitados', '1 número WhatsApp', '12 grupos Whats + 12 Telegram', 'Agendamento + Fila/Lista Shopee'] },
-  { id: 'diamante', name: 'Diamante', price: 'R$ 299,90/ano', desc: 'Para expandir suas lojas e copiar ofertas.', feats: ['Tudo do Premium', '20 grupos Whats + 20 Telegram', 'Fila/Lista multi-loja', 'Modo Copiador: 1 grupo'] },
-  { id: 'master', name: 'Master', price: 'R$ 697,00/ano', desc: 'Mais números, mais grupos, mais escala.', feats: ['Tudo do Diamante', '2 números WhatsApp', '30 grupos Whats', 'Copiador: 3 grupos'] },
+  { id: 'premium', name: 'Premium', price: 'R$ 159,90/ano', desc: 'Para colocar sua divulgação no automático.', feats: ['Posts ilimitados', '1 número WhatsApp', 'Copiador + Distribuidor', 'Agendamento, Fila e envio automático'] },
+  { id: 'diamante', name: 'Diamante', price: 'R$ 299,90/ano', desc: 'Para expandir suas lojas e copiar ofertas.', feats: ['Tudo do Premium', 'Shopee, Amazon, ML, Magalu e Shein', 'Relatórios de cliques'] },
+  { id: 'master', name: 'Master', price: 'R$ 697,00/ano', desc: 'Mais números, mais grupos, mais escala.', feats: ['Tudo do Diamante', '2 números WhatsApp', 'Regras ilimitadas por número'] },
 ];
 
 export default function Planos() {

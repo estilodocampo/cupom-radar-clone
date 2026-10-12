@@ -158,7 +158,7 @@ export default function Robo() {
             <div className="chan-top"><span className="chan-ico" style={{ background: '#2a1a3d' }}>📅</span></div>
             <h3>Agendamentos WhatsApp</h3>
             <p>Organize as próximas publicações nos seus grupos.</p>
-            <div className="chan-foot"><a href="/dashboard/postagens">Abrir</a><span>›</span></div>
+            <div className="chan-foot"><a href="/dashboard/postagens/fila">Abrir</a><span>›</span></div>
           </div>
         </div>
       </div>

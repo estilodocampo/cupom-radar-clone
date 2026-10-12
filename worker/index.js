@@ -23,7 +23,6 @@ const DATABASE_URL = process.env.DATABASE_URL || '';
 const log = pino({ level: process.env.LOG_LEVEL || 'info' });
 const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
 
-const SLOT_LIST = ['wa1', 'wa2'];
 const AUTH_BASE = (process.env.AUTH_DIR || '/data/auth').replace(/\/$/, '');
 function slotDir(slot) { return slot === 'wa2' ? `${AUTH_BASE}_2` : AUTH_BASE; }
 function newConn(slot) {
@@ -189,7 +188,7 @@ async function resolveMlShowcase(showcaseUrl, hints, timeoutMs = 10000) {
 }
 
 const crypto = require('crypto');
-const WEB_URL = (process.env.WEB_URL || 'https://cupom-radar-clone-production.up.railway.app').replace(/\/$/, '');
+const WEB_URL = (process.env.WEB_URL || 'https://app.estilodocampo.com.br').replace(/\/$/, '');
 
 async function shopeeShortLink(originUrl, subIds, creds) {
   const query = `mutation { generateShortLink(input: { originUrl: ${JSON.stringify(originUrl)}, subIds: ${JSON.stringify(subIds.slice(0, 5))} }) { shortLink } }`;
@@ -291,7 +290,7 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
 async function loadCopiadores() {
   if (!pool) return;
   try {
-    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8,$9)', ['shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'lista_envio', 'shopee_api', 'boasvindas']);
+    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8)', ['shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'shopee_api', 'boasvindas']);
     const byUser = {};
     for (const r of rows) {
       byUser[r.userId] = byUser[r.userId] || { affIds: {} };
@@ -463,11 +462,6 @@ async function jaProcessou(c, targetJid, text) {
   }
 }
 
-// Enfileira (legado, sem uso): a fila foi removida — fora da janela, perde-se.
-async function enfileirar() {
-  return false;
-}
-
 // Sem fila: se não couber na janela, perde-se (decisão do usuário).
 // A trava anti-duplicata (reserva + marca) continua valendo.
 // Retorna { ok, sent: [{jid, id, participant}] } para o mapa de repasses.
@@ -557,71 +551,6 @@ async function handleCopiador(msg, slot) {
         }
       }
     }
-  }
-}
-
-// Drena a fila respeitando os mesmos limites (nada se perde)
-async function tickQueue() {
-  if (!pool || !conns.wa1.connected) return;
-  let rows = [];
-  try {
-    const r = await pool.query(
-      'SELECT id, "userId", kind, "targetJid", text, "mediaType", media, fp FROM "QueuedOffer" WHERE status = $1 ORDER BY "createdAt" LIMIT 300',
-      ['pending']
-    );
-    rows = r.rows;
-  } catch (e) {
-    log.warn({ e: String(e) }, 'poll fila falhou');
-    return;
-  }
-  if (!rows.length) return;
-  // Agrupa por mensagem: todos os destinos da MESMA oferta saem numa janela só
-  const groups = new Map();
-  for (const r of rows) {
-    const k = `${r.userId}|${r.kind}|${r.fp}`;
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(r);
-  }
-  for (const items of groups.values()) {
-    const first = items[0];
-    const cfg = first.kind === 'distribuidor'
-      ? distribuidores.find((d) => d.userId === first.userId)
-      : copiadores.find((c) => c.userId === first.userId);
-    if (!cfg) {
-      await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = ANY($3::text[])', ['canceled', 'origem nao encontrada', items.map((i) => i.id)]).catch(() => {});
-      continue;
-    }
-    // Destino removido da configuração: cancela em vez de mandar para lugar errado
-    const validos = [];
-    for (const i of items) {
-      if (cfg.targets.includes(i.targetJid)) validos.push(i);
-      else await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = $3', ['canceled', 'destino removido', i.id]).catch(() => {});
-    }
-    if (!validos.length) continue;
-    if (cfg.pausado) break; // pausado: espera o usuário retomar
-    if (!(await passaLimites(cfg))) break; // espera a próxima janela
-    let ok = 0;
-    for (const i of validos) {
-      try {
-        const mediaBuf = i.media ? Buffer.from(i.media, 'base64') : null;
-        await sendComMidia(i.targetJid, i.text, mediaBuf, i.mediaType);
-        await pool.query('UPDATE "QueuedOffer" SET status = $1, "sentAt" = NOW() WHERE id = $2', ['sent', i.id]).catch(() => {});
-        await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [i.userId, i.targetJid, i.text, 'sent', i.kind]).catch(() => {});
-        ok++;
-      } catch (e) {
-        const err = String(e).slice(0, 300);
-        if (/not found|no matching session|logged out|item-not-found/i.test(err)) {
-          await pool.query('UPDATE "QueuedOffer" SET status = $1, error = $2 WHERE id = $3', ['failed', err, i.id]).catch(() => {});
-        } else {
-          await pool.query('UPDATE "QueuedOffer" SET error = $1 WHERE id = $2', [err, i.id]).catch(() => {});
-        }
-      }
-    }
-    if (ok) {
-      marcarEnvio(cfg);
-      log.info({ kind: first.kind, destinos: ok, oferta: first.fp }, 'fila drenada');
-    }
-    if (ok < validos.length) break; // houve erro: tenta o resto no próximo ciclo
   }
 }
 
@@ -740,16 +669,6 @@ function sendJson(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 
-async function filaPendente() {
-  if (!pool) return 0;
-  try {
-    const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM "QueuedOffer" WHERE status = $1', ['pending']);
-    return rows[0] ? rows[0].n : 0;
-  } catch {
-    return 0;
-  }
-}
-
 async function connectSlot(slot) {
   const cx = conns[slot];
   if (!cx) return;
@@ -866,7 +785,6 @@ async function groupsInUse() {
       const c = r.config || {};
       if (r.provider === 'envio_auto' && c.groupJid) out.push(c.groupJid);
       else if (r.provider === 'boasvindas') out.push(...(c.targets || []));
-      else if (r.provider === 'lista_envio') out.push(...((c.groups || []).map((g) => g.id).filter(Boolean)));
     }
     const cop = await pool.query('SELECT hub FROM "CopiadorRule"').catch(() => ({ rows: [] }));
     for (const r of cop.rows) if (r.hub) out.push(r.hub);
@@ -896,91 +814,6 @@ async function tick() {
     } catch (e) {
       await pool.query('UPDATE "ScheduledPost" SET status = $1, error = $2 WHERE id = $3', ['failed', String(e).slice(0, 500), r.id]).catch(() => {});
       await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind, error) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)', [r.userId, r.groupJid, r.message, 'failed', 'agendado', String(e).slice(0, 500)]).catch(() => {});
-    }
-  }
-}
-
-// ---- Radar Shopee: importação automática por palavras-chave ----
-function buildShopeePost({ title, priceFrom, priceTo, link, coupon }) {
-  return `🔥 OFERTA SHOPEE 🔥\n\n📌 ${title}\n${priceFrom ? `❌ De: ${priceFrom}\n` : ''}✅ Por: ${priceTo}\n${coupon ? `🎟️ Cupom: ${coupon}\n` : ''}\n👉 ${link}\n\n⚠️ Estoque limitado!`;
-}
-
-let radarDiscoveryWarnedAt = 0;
-
-// Descoberta de produtos na API de afiliados Shopee.
-// PENDENTE: confirmar as queries de busca após introspecção do schema com as
-// credenciais do usuário (App ID + Secret). Interface de retorno:
-// [{ key, url, title, priceFrom?, priceTo }] — preços já formatados ("R$ 49,90").
-async function discoverShopeeProducts(keywords, creds) {
-  void keywords; void creds;
-  if (Date.now() - radarDiscoveryWarnedAt > 6 * 3600 * 1000) {
-    radarDiscoveryWarnedAt = Date.now();
-    log.warn('radar: descoberta Shopee pendente de introspecção da API (aguardando credenciais)');
-  }
-  return [];
-}
-
-async function tickRadar() {
-  if (!pool || !conns.wa1.connected) return;
-  let radars = [];
-  try {
-    const r = await pool.query(
-      `SELECT id, "userId", name, keywords, "targetGroups", "intervalMinutes", "maxPostsPerRun"
-       FROM "RadarConfig" WHERE active = true
-       AND ("lastRunAt" IS NULL OR "lastRunAt" <= NOW() - ("intervalMinutes" || ' minutes')::INTERVAL)
-       ORDER BY "lastRunAt" NULLS FIRST LIMIT 5`
-    );
-    radars = r.rows;
-  } catch (e) {
-    log.warn({ e: String(e) }, 'poll radar falhou');
-    return;
-  }
-  if (!radars.length) return;
-  let credsByUser = {};
-  try {
-    const c = await pool.query('SELECT "userId", config FROM "Integration" WHERE provider = $1', ['shopee_api']);
-    for (const row of c.rows) {
-      if (row.config && row.config.appId && row.config.secret) credsByUser[row.userId] = { appId: row.config.appId, secret: row.config.secret };
-    }
-  } catch { /* segue sem credenciais */ }
-  for (const radar of radars) {
-    const done = async () => {
-      await pool.query('UPDATE "RadarConfig" SET "lastRunAt" = NOW() WHERE id = $1', [radar.id]).catch(() => {});
-    };
-    const creds = credsByUser[radar.userId];
-    if (!creds) {
-      log.warn({ radar: radar.name }, 'radar sem credenciais Shopee, pulando rodada');
-      await done();
-      continue;
-    }
-    try {
-      const found = await discoverShopeeProducts(radar.keywords || [], creds);
-      const fresh = [];
-      for (const item of found.slice(0, radar.maxPostsPerRun * 3)) {
-        if (!item || !item.url || !item.title || !item.priceTo) continue;
-        const ex = await pool.query('SELECT 1 FROM "RadarPost" WHERE "radarId" = $1 AND "itemKey" = $2 LIMIT 1', [radar.id, item.key || item.url]).catch(() => ({ rows: [] }));
-        if (ex.rows && ex.rows.length) continue;
-        fresh.push(item);
-        if (fresh.length >= radar.maxPostsPerRun) break;
-      }
-      for (const item of fresh) {
-        const short = await shopeeShortLink(item.url.split('?')[0], ['cupomradar'], creds);
-        const text = buildShopeePost({ title: item.title, priceFrom: item.priceFrom, priceTo: item.priceTo, link: short });
-        for (const t of radar.targetGroups || []) {
-          try {
-            await conns.wa1.sock.sendMessage(t, { text, linkPreview: null });
-            await new Promise((rr) => setTimeout(rr, 1500));
-            await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [radar.userId, t, text, 'sent', 'radar']).catch(() => {});
-          } catch (e) {
-            log.warn({ e: String(e).slice(0, 200) }, 'radar envio falhou');
-          }
-        }
-        await pool.query('INSERT INTO "RadarPost" (id, "radarId", "itemKey") VALUES (gen_random_uuid(), $1, $2) ON CONFLICT ("radarId", "itemKey") DO NOTHING', [radar.id, item.key || item.url]).catch(() => {});
-      }
-      await done();
-      log.info({ radar: radar.name, enviados: fresh.length }, 'radar rodada concluída');
-    } catch (e) {
-      log.warn({ e: String(e).slice(0, 200), radar: radar.name }, 'radar rodada falhou');
     }
   }
 }
@@ -1072,5 +905,3 @@ setInterval(() => {
 setInterval(() => {
   if (pool) pool.query('DELETE FROM "QueuedOffer" WHERE "createdAt" < NOW() - INTERVAL \'7 days\'').catch(() => {});
 }, 24 * 3600 * 1000);
-setInterval(() => tickRadar().catch((e) => log.warn(String(e).slice(0, 150))), 5 * 60 * 1000);
-setTimeout(() => tickRadar().catch(() => {}), 60000);

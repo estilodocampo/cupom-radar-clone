@@ -16,7 +16,7 @@ export default function Home() {
       <header className="hero">
         <span className="pill">🚀 A automação dos top afiliados</span>
         <h1>Sua divulgação no <span>piloto automático</span></h1>
-        <p>Cole o link do produto, gere a postagem pronta e dispare nos seus grupos de WhatsApp e Telegram — no horário ideal, mesmo offline.</p>
+        <p>Cole o link do produto, gere a postagem pronta e dispare nos seus grupos de WhatsApp — no horário ideal, mesmo offline.</p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
           <a className="btn btn-primary" href="/login">Começar agora</a>
           <a className="btn btn-ghost" href="#planos">Ver planos</a>
@@ -49,7 +49,7 @@ export default function Home() {
         ))}
       </div>
 
-      <footer className="footer">© 2026 Cupom Radar Clone · Fase 2 · Feito para afiliados brasileiros</footer>
+      <footer className="footer">© 2026 Cupom Radar · Feito para afiliados brasileiros</footer>
     </div>
   );
 }

@@ -81,7 +81,7 @@ export default function Dados() {
 
         <div className="card danger" style={{ marginTop: 10 }}>
           <h3>🛑 Excluir Conta</h3>
-          <p className="hint">Apaga permanentemente sua conta e todos os dados associados: instâncias de WhatsApp, bots de Telegram, agendamentos, biolinks, credenciais de afiliado, imagens e histórico. Assinaturas recorrentes são canceladas. Esta ação não pode ser desfeita.</p>
+          <p className="hint">Apaga permanentemente sua conta e todos os dados associados: conexões de WhatsApp, agendamentos, credenciais de afiliado e histórico. Assinaturas recorrentes são canceladas. Esta ação não pode ser desfeita.</p>
           <button className="btn btn-sm" style={{ background: '#3d1414', color: '#fca5a5', border: '1px solid #6e2222' }} onClick={del}>Excluir permanentemente</button>
         </div>
       </div>
