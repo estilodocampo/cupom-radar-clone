@@ -53,7 +53,6 @@ a { color: var(--green); }
 label.lbl { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; font-weight: 600; }
 .auth-wrap { max-width: 440px; margin: 8vh auto; }
 .auth-card { text-align: center; }
-.result { background: #0b1226; border: 1px solid var(--border); padding: 16px; margin-top: 16px; white-space: pre-wrap; border-radius: 12px; font-size: 14px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--border); padding: 12px 16px; border-radius: 12px; margin-bottom: 8px; background: var(--bg2); font-size: 14px; }
 .badge { border-radius: 999px; padding: 3px 12px; font-size: 12px; font-weight: 700; }
 .badge-ok { background: #12332a; color: #7df0b2; border: 1px solid #1d5c40; }
@@ -237,7 +236,6 @@ a.card { text-decoration: none; color: inherit; display: block; }
   .orbit { display: none; }
   .modal { padding: 18px; border-radius: 14px; }
   .qr-box img { width: 190px; }
-  .result { padding: 13px; font-size: 13.5px; }
   .input, select.input, textarea.input { font-size: 16px; padding: 11px 12px; } /* evita zoom no iOS */
   /* Textos longos (JID, badge) não esturam a página */
   .container, .card, .topbar-app { word-break: break-word; overflow-wrap: anywhere; }
@@ -262,4 +260,14 @@ a.card { text-decoration: none; color: inherit; display: block; }
   .help-fab { font-size: 13px; padding: 10px 14px; }
   .topbar-hello small { font-size: 11px; }
 }
+
+/* Prévia estilo WhatsApp */
+.wa-phone { background: #0b141a; border: 1px solid var(--border); border-radius: 12px; padding: 16px 12px; margin-top: 16px; display: flex; flex-direction: column; align-items: flex-end; }
+body.light .wa-phone { background: #e7dfd3; }
+.wa-bubble { background: #005c4b; color: #e9edef; border-radius: 8px; padding: 8px 10px 6px; max-width: 94%; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; box-shadow: 0 1px 1px rgba(0,0,0,.35); }
+body.light .wa-bubble { background: #d9fdd3; color: #111b21; }
+.wa-link { color: #53bdeb; }
+body.light .wa-link { color: #027eb5; }
+.wa-meta { display: block; text-align: right; font-size: 11px; opacity: .85; margin-top: 4px; }
+.wa-check { color: #53bdeb; }
 

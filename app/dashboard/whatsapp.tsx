@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Empty from './Empty';
+import WaPreview from './postagens/WaPreview';
 
 interface Group { id: string; name: string }
 interface Sched { id: string; groupName: string | null; groupJid: string; message: string; scheduledAt: string; status: string }
@@ -74,6 +75,12 @@ export default function Whatsapp() {
         <textarea className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Cole aqui o texto gerado na aba Gerar oferta" rows={4} />
         <label className="lbl">Agendar para (opcional p/ envio imediato)</label>
         <input className="input" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+        {text.trim() !== '' && (
+          <>
+            <label className="lbl">Prévia no WhatsApp</label>
+            <WaPreview text={text} />
+          </>
+        )}
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary" onClick={sendTest}>Enviar agora</button>
           <button className="btn btn-ghost" onClick={schedule}>Agendar</button>

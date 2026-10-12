@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Whatsapp from '../../whatsapp';
 import { SlotPicker } from '../SlotPicker';
+import WaPreview from '../WaPreview';
 
 export default function Produtos() {
   const [url, setUrl] = useState('');
@@ -10,12 +11,15 @@ export default function Produtos() {
   const [slot, setSlot] = useState<'wa1' | 'wa2'>('wa1');
   const [extraUrl, setExtraUrl] = useState('');
   const [result, setResult] = useState('');
+  const [warning, setWarning] = useState('');
 
   async function generate() {
     setResult('Gerando...');
+    setWarning('');
     const res = await fetch('/api/generate-post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, title, priceTo, slot, extraUrl: extraUrl.trim() || undefined }) });
     const data = await res.json();
-    setResult((data.text || JSON.stringify(data)) + (data.warning ? `\n\n⚠️ ${data.warning}` : ''));
+    setResult(data.text || JSON.stringify(data));
+    if (data.warning) setWarning(data.warning);
   }
 
   return (
@@ -38,9 +42,11 @@ export default function Produtos() {
           <label className="lbl">Preço</label>
           <input className="input" value={priceTo} onChange={(e) => setPriceTo(e.target.value)} />
           <button className="btn btn-primary" style={{ width: '100%' }} onClick={generate}>Gerar postagem</button>
-          {result && (
+          {result && result !== 'Gerando...' && (
             <>
-              <div className="result">{result}</div>
+              <label className="lbl" style={{ marginTop: 12 }}>Prévia no WhatsApp</label>
+              <WaPreview text={result} />
+              {warning && <p className="hint" style={{ marginTop: 8 }}>⚠️ {warning}</p>}
               <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(result); alert('Texto copiado!'); }}>📋 Copiar texto</button>
             </>
           )}
