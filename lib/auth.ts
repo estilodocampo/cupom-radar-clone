@@ -18,13 +18,16 @@ const providers: NextAuthOptions['providers'] = [
       if (!email || !email.includes('@')) return null;
       let user = await prisma.user.findUnique({ where: { email } }).catch(() => null);
       if (!user) {
-        // Primeiro acesso: cria conta (define senha se informada)
-        const data: { email: string; passwordHash?: string } = { email };
-        if (password.length >= 6) data.passwordHash = await bcrypt.hash(password, 10);
-        user = await prisma.user.create({ data }).catch(() => null);
-      } else if (user.passwordHash) {
-        // Conta com senha: exige conferência
-        if (!password || !(await bcrypt.compare(password, user.passwordHash).catch(() => false))) return null;
+        // Primeiro acesso: cria conta — exige senha válida (nunca cria conta sem senha)
+        if (password.length < 6) return null;
+        const passwordHash = await bcrypt.hash(password, 10).catch(() => null);
+        if (!passwordHash) return null;
+        user = await prisma.user.create({ data: { email, passwordHash } }).catch(() => null);
+      } else if (!user.passwordHash) {
+        // Conta OAuth (Google) ou legada sem senha: só entra pelo botão do Google
+        return null;
+      } else if (!password || !(await bcrypt.compare(password, user.passwordHash).catch(() => false))) {
+        return null;
       }
       if (!user) return null;
       return { id: user.id, email: user.email, name: user.name };

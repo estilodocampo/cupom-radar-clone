@@ -1209,13 +1209,19 @@ connectSlot('wa1').catch((e) => log.error(String(e)));
 connectSlot('wa2').catch((e) => log.error(String(e)));
 loadCopiadores().catch(() => {});
 carregarAlvosQuebrados().catch(() => {});
+try { limpezaRetencao(); } catch { /* ignora */ }
 setInterval(tick, 15000);
 setInterval(loadCopiadores, 60000);
 // Limpa mapas de repasse com mais de 7 dias (fora da janela de apagar do WhatsApp)
 setInterval(() => {
   if (pool) pool.query('DELETE FROM "ForwardMap" WHERE "createdAt" < NOW() - INTERVAL \'7 days\'').catch(() => {});
 }, 24 * 3600 * 1000);
-// Retenção anti-duplicata: registros com mais de 7 dias não bloqueiam mais nada
-setInterval(() => {
-  if (pool) pool.query('DELETE FROM "QueuedOffer" WHERE "createdAt" < NOW() - INTERVAL \'7 days\'').catch(() => {});
-}, 24 * 3600 * 1000);
+// Retenção: anti-duplicata expira em 7 dias; log de disparos em 90 dias;
+// agendados já processados em 30 dias. Sem isso as tabelas crescem para sempre.
+function limpezaRetencao() {
+  if (!pool) return;
+  pool.query('DELETE FROM "QueuedOffer" WHERE "createdAt" < NOW() - INTERVAL \'7 days\'').catch(() => {});
+  pool.query('DELETE FROM "DispatchLog" WHERE "sentAt" < NOW() - INTERVAL \'90 days\'').catch(() => {});
+  pool.query('DELETE FROM "ScheduledPost" WHERE status IN (\'sent\',\'failed\') AND "scheduledAt" < NOW() - INTERVAL \'30 days\'').catch(() => {});
+}
+setInterval(limpezaRetencao, 24 * 3600 * 1000);
