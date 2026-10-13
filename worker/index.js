@@ -239,8 +239,121 @@ async function shortenUrl(longUrl, userId, slot, timeoutMs = 8000) {
   return longUrl;
 }
 
+const UA_NAV = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+const IMG_MAX = 6 * 1024 * 1024; // ignora foto maior que 6MB
+
+// Só busca foto em PÁGINA DE PRODUTO (nunca em vitrine/perfil/loja)
+function isProductPage(u) {
+  try {
+    const s = String(u).toLowerCase();
+    if (/\/social\//.test(s)) return false;
+    return /\/mlb-[0-9]+/.test(s)
+      || /produto\.mercadolivre\.com\.br\//.test(s)
+      || /shopee\.[^/]+\/.*product/i.test(s)
+      || /\/(dp|gp\/product)\/[a-z0-9]+/i.test(s)
+      || /shein\.[^/]+\/.*-p-[0-9]+\.html/i.test(s)
+      || /magazineluiza\.com\.br\/.*\/p\//i.test(s);
+  } catch { return false; }
+}
+
+// Baixa e valida bytes de imagem (limite de tamanho + content-type)
+async function baixarImagemUrl(src, pageUrl, timeoutMs = 10000) {
+  try {
+    if (!src || /^data:/i.test(src)) return null;
+    src = new URL(src, pageUrl).toString();
+    if (!/^https?:\/\//i.test(src)) return null;
+    const c2 = new AbortController();
+    const t2 = setTimeout(() => c2.abort(), timeoutMs);
+    const r2 = await fetch(src, {
+      redirect: 'follow', signal: c2.signal,
+      headers: { 'User-Agent': UA_NAV },
+    });
+    clearTimeout(t2);
+    if (!r2.ok) return null;
+    const ct2 = String(r2.headers.get('content-type') || '').toLowerCase();
+    if (!ct2.includes('image/') && !ct2.includes('webp')) return null;
+    if (Number(r2.headers.get('content-length') || 0) > IMG_MAX) return null;
+    const buf = Buffer.from(await r2.arrayBuffer());
+    if (!buf.length || buf.length > IMG_MAX) return null;
+    return buf;
+  } catch { return null; }
+}
+
+// Fallback: foto via busca de imagens do DuckDuckGo (sem chave), casando o título.
+// Só aceita parecido (>= 0.5) para não anexar foto de outro produto.
+async function buscarImagemDdg(hints, timeoutMs = 8000) {
+  try {
+    const hint = (hints || []).find((h) => normWords(h).length >= 3);
+    if (!hint) return null;
+    const query = normWords(hint).join(' ');
+    const p = await fetch('https://duckduckgo.com/?q=' + encodeURIComponent(query) + '&iar=images', {
+      headers: { 'User-Agent': UA_NAV, 'Accept-Language': 'pt-BR,pt;q=0.9' },
+    });
+    const phtml = await p.text();
+    const vqd = (phtml.match(/vqd="([^"]+)"/) || phtml.match(/vqd=([\d-]+)/) || [])[1];
+    if (!vqd) return null;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const r = await fetch(`https://duckduckgo.com/i.js?o=json&q=${encodeURIComponent(query)}&vqd=${vqd}`, {
+      signal: ctrl.signal,
+      headers: { 'User-Agent': UA_NAV, Referer: 'https://duckduckgo.com/', 'Accept-Language': 'pt-BR,pt;q=0.9' },
+    });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    const results = (j && j.results) || [];
+    const hw = normWords(hint);
+    // Candidatos com score; thumbnail do Bing entra como reserva (-0.05)
+    const cands = [];
+    for (const it of results.slice(0, 12)) {
+      const tw = normWords(it.title || '');
+      if (!tw.length) continue;
+      const score = hw.filter((w) => tw.includes(w)).length / hw.length;
+      if (score < 0.5) continue;
+      if (it.image) cands.push({ score, url: it.image });
+      if (it.thumbnail) cands.push({ score: score - 0.05, url: it.thumbnail });
+      if (score >= 0.95) break;
+    }
+    // Prefere jpg/png (WhatsApp exibe com certeza); webp entra se for o que há
+    const bonus = (u) => (/\.(jpe?g|png)(\?|#|$)/i.test(u) ? 0.1 : 0);
+    cands.sort((a, b) => (b.score + bonus(b.url)) - (a.score + bonus(a.url)));
+    for (const c of cands.slice(0, 3)) {
+      const buf = await baixarImagemUrl(c.url, 'https://duckduckgo.com/', timeoutMs);
+      if (buf) return buf;
+    }
+    return null;
+  } catch { return null; }
+}
+
+// Baixa a foto do anúncio quando a oferta veio só texto:
+// 1) og:image da página do produto  2) busca de imagens pelo título
+async function buscarImagemProduto(pageUrl, hints, timeoutMs = 10000) {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const r = await fetch(pageUrl, {
+      redirect: 'follow', signal: ctrl.signal,
+      headers: { 'User-Agent': UA_NAV, 'Accept-Language': 'pt-BR,pt;q=0.9' },
+    });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    if (!String(r.headers.get('content-type') || '').toLowerCase().includes('html')) return null;
+    const html = await r.text();
+    if (!html || html.length > 3000000) return null;
+    const m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+      || html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
+    let src = m && m[1] ? m[1].trim().replace(/&amp;/g, '&') : null;
+    const img = src ? await baixarImagemUrl(src, pageUrl, timeoutMs) : null;
+    if (img) return img;
+    // Página sem og:image (ex.: ML renderiza via JS) -> busca pelo título
+    return await buscarImagemDdg(hints, timeoutMs);
+  } catch { return null; }
+}
+
 async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, stripCoupons = true, slot = 'wa1') {
   let converted = 0;
+  let destino = null; // página do produto (para buscar a foto quando vier só texto)
   const urls = [...new Set(text.match(/https?:\/\/[^\s)]+/g) || [])];
   let out = text;
   for (let raw of urls) {
@@ -252,6 +365,7 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
       if (store === 'shopee' && shopeeCreds) {
         final = await shopeeShortLink(url.split('?')[0], ['cupomradar'], shopeeCreds);
         converted++;
+        if (!destino) { const c0 = url.split('?')[0]; if (isProductPage(c0)) destino = c0; }
       } else if (store === 'mercadolivre' && affIds[store]) {
         // Origem postou vitrine (/social/): tenta resolver para a página do anúncio.
         // 1) produtos listados na própria vitrine  2) busca externa gratuita  3) mantém vitrine com rastreio.
@@ -270,9 +384,11 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
         }
         final = toMlAffiliateLink(base, affIds[store], mlMattTool);
         converted++;
+        if (!destino && isProductPage(base)) destino = base;
       } else if (store !== 'unknown' && store !== 'mercadolivre' && affIds[store]) {
         final = toAffiliateLink(url, affIds[store], store);
         converted++;
+        if (!destino && isProductPage(url)) destino = url;
       }
       if (final) {
         final = await shortenUrl(final, userId, slot);
@@ -284,7 +400,7 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
   }
   // Remove linhas de cupom da origem (ex.: "Cupom: MELHORCUPOM") — não valem no seu grupo
   if (stripCoupons) out = out.split('\n').filter((l) => !/cupom/i.test(l)).join('\n').replace(/\n{3,}/g, '\n\n');
-  return { out, converted };
+  return { out, converted, destino };
 }
 
 async function loadCopiadores() {
@@ -545,9 +661,14 @@ async function handleCopiador(msg, slot) {
   for (const c of copiadores) {
     if ((c.slot || 'wa1') !== slot) continue;
     if (c.source !== remote || !c.targets.length) continue;
-    const { out, converted } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons, c.slot);
+    const { out, converted, destino } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons, c.slot);
     if (!converted) continue;
-    const mediaType = hasImage ? 'image' : hasVideo ? 'video' : null;
+    let mediaType = hasImage ? 'image' : hasVideo ? 'video' : null;
+    // Oferta veio só texto? Busca a foto na página do anúncio
+    if (!media && destino) {
+      const img = await buscarImagemProduto(destino, titleHints(text));
+      if (img) { media = img; mediaType = 'image'; log.info({ slot }, 'imagem do anúncio anexada'); }
+    }
     const res = await enviarLote(c, c.targets, comMarca(out), media, mediaType, slot);
     if (!res.ok) continue;
     // Cadeia determinística: o que o Copiador posta num hub dispara o
@@ -617,18 +738,24 @@ async function handleDistribuidor(msg, slot) {
     if (d.onlyMine && !msg.key.fromMe) { log.info({ hub: remote }, 'distribuidor: onlyMine e não é sua, ignorada'); continue; }
     if (d.requireLink && !/https?:\/\//.test(text)) { log.info({ hub: remote }, 'distribuidor: sem link e requireLink ligado, ignorada'); continue; }
     let out = text;
+    let destino = null;
     if (d.convert) {
       const r = await convertTextLinks(text, d.affIds, d.shopeeCreds, d.mlMattTool, d.userId, d.stripCoupons, d.slot);
-      if (r.converted) out = r.out;
+      if (r.converted) { out = r.out; destino = r.destino || null; }
     }
     if (d.prefix) out = `${d.prefix}\n\n${out}`;
     if (d.suffix) out = `${out}\n\n${d.suffix}`;
     let media = null;
+    let mediaType = hasImage ? 'image' : hasVideo ? 'video' : null;
     if (hasImage || hasVideo) {
       media = await baixarMidia(msg, slot, 'distribuidor');
     }
+    if (!media && destino) {
+      const img = await buscarImagemProduto(destino, titleHints(text));
+      if (img) { media = img; mediaType = 'image'; log.info({ slot }, 'imagem do anúncio anexada'); }
+    }
     // Post manual seu fura a janela de intervalo (mas conta na cota e na anti-duplicata)
-    await distribuirAgora(d, out, media, hasImage ? 'image' : hasVideo ? 'video' : null, msg.key.id, slot, eManual);
+    await distribuirAgora(d, out, media, mediaType, msg.key.id, slot, eManual);
   }
 }
 
