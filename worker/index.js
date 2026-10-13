@@ -144,7 +144,7 @@ async function resolveMlDdg(hints, timeoutMs = 8000) {
       for (const h of hints) {
         const hw = normWords(h);
         if (!hw.length) continue;
-        const score = hw.filter((w) => tw.includes(w)).length / hw.length;
+        const score = scoreTitulo(hw, tw);
         if (score > bestScore) { bestScore = score; best = href.split('?')[0].split('#')[0]; }
       }
       if (bestScore >= 0.95) break;
@@ -419,10 +419,17 @@ async function buscarImagemProduto(pageUrl, hints, timeoutMs = 10000) {
     }
     // Página sem og:image (ex.: Shopee/ML renderizam via JS) -> busca pelo título:
     // DDG primeiro; se bloqueado (202/rate-limit), Bing.
-    const viaDdg = await buscarImagemDdg(hints, timeoutMs).catch(() => null);
-    if (viaDdg) return viaDdg;
-    return await buscarImagemBing(hints, timeoutMs).catch(() => null);
+    return await buscarImagemPorTitulo(hints, timeoutMs);
   } catch { return null; }
+}
+
+// Busca a foto do produto só pelo título da oferta (DDG, depois Bing).
+// Usada quando não há página de produto (ex.: vitrine ML não resolvida).
+async function buscarImagemPorTitulo(hints, timeoutMs = 10000) {
+  log.info('foto: sem página de produto, buscando por título');
+  const viaDdg = await buscarImagemDdg(hints, timeoutMs).catch(() => null);
+  if (viaDdg) return viaDdg;
+  return await buscarImagemBing(hints, timeoutMs).catch(() => null);
 }
 
 async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, stripCoupons = true, slot = 'wa1') {
@@ -743,9 +750,12 @@ async function handleCopiador(msg, slot) {
     const { out, converted, destino } = await convertTextLinks(text, c.affIds, c.shopeeCreds, c.mlMattTool, c.userId, !c.keepCoupons, c.slot);
     if (!converted) continue;
     let mediaType = hasImage ? 'image' : hasVideo ? 'video' : null;
-    // Oferta veio só texto? Busca a foto na página do anúncio
-    if (!media && destino) {
-      const img = await buscarImagemProduto(destino, titleHints(text));
+    // Oferta veio só texto? Busca a foto: na página do anúncio se houver,
+    // senão direto pelo título (ex.: vitrine ML não resolvida).
+    if (!media) {
+      const img = destino
+        ? await buscarImagemProduto(destino, titleHints(text))
+        : await buscarImagemPorTitulo(titleHints(text));
       if (img) { media = img; mediaType = 'image'; log.info({ slot }, 'imagem do anúncio anexada'); }
     }
     const res = await enviarLote(c, c.targets, comMarca(out), media, mediaType, slot);
@@ -831,8 +841,10 @@ async function handleDistribuidor(msg, slot) {
     if (hasImage || hasVideo) {
       media = await baixarMidia(msg, slot, 'distribuidor');
     }
-    if (!media && destino) {
-      const img = await buscarImagemProduto(destino, titleHints(text));
+    if (!media) {
+      const img = destino
+        ? await buscarImagemProduto(destino, titleHints(text))
+        : await buscarImagemPorTitulo(titleHints(text));
       if (img) { media = img; mediaType = 'image'; log.info({ slot }, 'imagem do anúncio anexada'); }
     }
     // Post manual seu fura a janela de intervalo (mas conta na cota e na anti-duplicata)
