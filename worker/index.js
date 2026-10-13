@@ -1022,6 +1022,9 @@ const meId = (sock) => (sock?.user?.id || '').split(':')[0];
 const meLid = (sock) => (sock?.user?.lid || '').split('@')[0];
 
 function canSendTo(sock, g) {
+  // Grupo normal (todos falam): se participo, posso enviar.
+  // Só no modo "só admins" (announce) preciso ser admin.
+  if (!g.announce) return true;
   if (!g.participants) return true; // sem dados: não bloqueia
   const adm = g.participants.filter((p) => p.admin);
   if (!adm.length) return true;
