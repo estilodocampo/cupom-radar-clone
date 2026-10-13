@@ -11,12 +11,9 @@ export default function FeedbackPage() {
   }
   return (
     <>
-      <a className="back" href="/dashboard">← Voltar para o Dashboard</a>
-      <div className="eyebrow">● CONFIGURAÇÕES</div>
-      <h1 className="h1">Enviar Feedback</h1>
-      <p className="sub">Sua opinião melhora a ferramenta.</p>
+      <h1 className="h1">Feedback</h1>
       <div className="card" style={{ maxWidth: 520 }}>
-        <textarea className="input" rows={5} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Conte o que achou..." />
+        <textarea className="input" rows={5} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="O que achou?" />
         <button className="btn btn-primary btn-sm" onClick={send}>Enviar</button>
         {msg && <p>{msg}</p>}
       </div>

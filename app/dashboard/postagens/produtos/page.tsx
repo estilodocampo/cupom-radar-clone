@@ -24,30 +24,26 @@ export default function Produtos() {
 
   return (
     <>
-      <a className="back" href="/dashboard">← Voltar para o Dashboard</a>
-      <div className="eyebrow">● POSTAGENS</div>
-      <h1 className="h1">Produtos</h1>
-      <p className="sub">Gere a oferta e dispare nos seus grupos.</p>
+      <h1 className="h1">Criar oferta</h1>
       <div className="grid" style={{ maxWidth: 720 }}>
         <div className="card">
-          <h3>✨ Gerar oferta</h3>
-          <label className="lbl">Número do link</label>
+          <h3>✨ Nova oferta</h3>
           <SlotPicker slot={slot} setSlot={setSlot} phones={{}} />
-          <label className="lbl">Link do produto</label>
+          <label className="lbl">Link</label>
           <input className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." />
-          <label className="lbl">Link extra (opcional)</label>
-          <input className="input" value={extraUrl} onChange={(e) => setExtraUrl(e.target.value)} placeholder="Segundo link com seu afiliado (opcional)" />
+          <label className="lbl">Link extra</label>
+          <input className="input" value={extraUrl} onChange={(e) => setExtraUrl(e.target.value)} placeholder="2º link (opcional)" />
           <label className="lbl">Título</label>
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
           <label className="lbl">Preço</label>
           <input className="input" value={priceTo} onChange={(e) => setPriceTo(e.target.value)} />
-          <button className="btn btn-primary" style={{ width: '100%' }} onClick={generate}>Gerar postagem</button>
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={generate}>Gerar</button>
           {result && result !== 'Gerando...' && (
             <>
-              <label className="lbl" style={{ marginTop: 12 }}>Prévia no WhatsApp</label>
+              <label className="lbl" style={{ marginTop: 12 }}>Prévia</label>
               <WaPreview text={result} />
               {warning && <p className="hint" style={{ marginTop: 8 }}>⚠️ {warning}</p>}
-              <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(result); alert('Texto copiado!'); }}>📋 Copiar texto</button>
+              <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(result); alert('Copiado!'); }}>📋 Copiar</button>
             </>
           )}
         </div>

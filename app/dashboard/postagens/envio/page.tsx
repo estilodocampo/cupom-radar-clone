@@ -54,12 +54,12 @@ export default function Envio() {
   async function sendTest() {
     if (!groupJid) { setMsg('❌ Selecione o grupo'); return; }
     setMsg('Enviando teste...');
-    const r = await fetch('/api/whatsapp/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: groupJid, text: '✅ Teste do Cupom Radar: envio automático funcionando!', slot }) }).then((x) => x.json());
+    const r = await fetch('/api/whatsapp/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: groupJid, text: '✅ Teste OK', slot }) }).then((x) => x.json());
     setMsg(r.ok ? '✅ Teste enviado!' : `❌ ${r.error}`);
   }
 
   async function unlink() {
-    if (!confirm('Desvincular o WhatsApp? Será preciso escanear o QR de novo.')) return;
+    if (!confirm('Desvincular? Vai precisar do QR de novo.')) return;
     const r = await fetch('/api/whatsapp/unlink', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot }) }).then((x) => x.json());
     setMsg(r.ok ? '✅ Desvinculado' : `❌ ${r.error}`);
     loadGroups(slot);
@@ -76,18 +76,16 @@ export default function Envio() {
       </div>
 
       <div className="card">
-        <h3>👥 Meus grupos</h3>
-        <p className="hint">Grupos em que o número conectado pode enviar. Ao entrar num grupo novo, ele aparece aqui — use “Recarregar grupos”.</p>
+        <h3>👥 Grupos</h3>
         <div style={{ marginTop: 8 }}>
-          <label className="lbl">Número</label>
           <SlotPicker slot={slot} setSlot={changeSlot} phones={phones} />
         </div>
         {groups.length === 0 ? (
           <div style={{ marginTop: 8 }}>
             <Empty
               icon="👥"
-              text={connected ? 'Este número ainda não está em nenhum grupo. Entre em um grupo com ele primeiro.' : 'Conecte o WhatsApp para ver seus grupos aqui.'}
-              actionLabel={connected ? undefined : 'Conectar WhatsApp'}
+              text={connected ? 'Entre em um grupo com este número primeiro.' : 'Conecte o WhatsApp para ver os grupos.'}
+              actionLabel={connected ? undefined : 'Conectar'}
               actionHref={connected ? undefined : '/dashboard/robo'}
             />
           </div>
@@ -109,7 +107,7 @@ export default function Envio() {
             ))}
             {semPermissao.length > 0 && (
               <p className="hint" style={{ marginTop: 8 }}>
-                {semPermissao.length} grupo(s) onde você não é admin e não consegue enviar: {semPermissao.map((g) => g.name).join(', ')}
+                {semPermissao.length} sem permissão de envio.
               </p>
             )}
           </div>
@@ -117,30 +115,28 @@ export default function Envio() {
 
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', marginTop: 14 }}>
           <div>
-            <label className="lbl">Grupo do WhatsApp</label>
+            <label className="lbl">Grupo</label>
             <select className="input" value={groupJid} onChange={(e) => setGroupJid(e.target.value)}>
               <option value="">Selecione...</option>
               {podeEnviar.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
-            <p className="hint">Entre com sua conta em pelo menos um grupo para ele aparecer aqui.</p>
           </div>
           <div>
-            <label className="lbl">Envio automático</label>
+            <label className="lbl">Automático</label>
             <button className="switch" aria-checked={autoNovo} onClick={() => setAutoNovo(!autoNovo)}>
               <span className="track" />
-              <span>Enviar produto novo sozinho</span>
+              <span>Enviar sozinho</span>
             </button>
-            <p className="hint">Quando ligado, ofertas geradas disparam sozinhas no grupo.</p>
           </div>
         </div>
         <div className="btn-row">
-          <button className="btn btn-primary btn-sm" onClick={save}>💾 Salvar</button>
-          <button className="btn btn-test btn-sm" onClick={sendTest}>🚀 Enviar teste</button>
-          <button className="btn btn-test btn-sm" onClick={() => loadGroups(slot)}>↻ Recarregar grupos</button>
-          <button className="btn btn-danger btn-sm" onClick={unlink}>🔌 Desvincular</button>
+          <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>
+          <button className="btn btn-test btn-sm" onClick={sendTest}>Teste</button>
+          <button className="btn btn-test btn-sm" onClick={() => loadGroups(slot)}>↻ Grupos</button>
+          <button className="btn btn-danger btn-sm" onClick={unlink}>Desvincular</button>
         </div>
         {msg && <p>{msg}</p>}
-        {!connected && <p className="hint">⚠️ WhatsApp desconectado — escaneie o QR em <a href="/dashboard/robo">Config Robô</a>.</p>}
+        {!connected && <p className="hint">⚠️ Desconectado — ver <a href="/dashboard/robo">Robô</a>.</p>}
       </div>
     </>
   );

@@ -31,20 +31,20 @@ const ACCOUNT: Item[] = [
 
 // Rótulo amigável da tela atual (breadcrumb do topo)
 const LABELS: [string, string][] = [
-  ['/dashboard/postagens/produtos', 'Gerar Postagem'],
-  ['/dashboard/postagens/copiador', 'Modo Copiador'],
+  ['/dashboard/postagens/produtos', 'Criar oferta'],
+  ['/dashboard/postagens/copiador', 'Copiador'],
   ['/dashboard/postagens/radar', 'Radar Shopee'],
-  ['/dashboard/postagens/sorteio', 'Sorteio + Boas-vindas'],
-  ['/dashboard/postagens/envio', 'Envio automático'],
-  ['/dashboard/postagens/fila', 'Modo Fila'],
-  ['/dashboard/postagens', 'Postagens'],
+  ['/dashboard/postagens/sorteio', 'Sorteio'],
+  ['/dashboard/postagens/envio', 'Envio'],
+  ['/dashboard/postagens/fila', 'Fila'],
+  ['/dashboard/postagens', 'Automação'],
   ['/dashboard/robo', 'Robô'],
   ['/dashboard/planos', 'Planos'],
   ['/dashboard/relatorios', 'Relatórios'],
   ['/dashboard/config/dados', 'Seus Dados'],
-  ['/dashboard/config/ajuda', 'Central de Ajuda'],
-  ['/dashboard/config/feedback', 'Enviar Feedback'],
-  ['/dashboard', 'Visão geral'],
+  ['/dashboard/config/ajuda', 'Ajuda'],
+  ['/dashboard/config/feedback', 'Feedback'],
+  ['/dashboard', 'Início'],
 ];
 
 const TABS: { href: string; label: string; icon: string }[] = [
@@ -74,7 +74,9 @@ function crumbs(path: string): { label: string; href: string | null }[] {
     acc += '/' + s;
     out.push({ label: labelFor(acc), href: acc });
   }
-  return out.map((c, i) => (i === out.length - 1 ? { ...c, href: null } : c));
+  // Máx. 2 níveis (pai › atual) para não poluir
+  const cut = out.slice(-2);
+  return cut.map((c, i) => (i === cut.length - 1 ? { ...c, href: null } : c));
 }
 
 function initials(name?: string | null, email?: string | null) {
@@ -182,7 +184,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
       </div>
 
-      <a className="help-fab" style={{ textDecoration: 'none' }} href="/dashboard/config/ajuda">💬 Precisa de ajuda?</a>
+      <a className="help-fab" style={{ textDecoration: 'none' }} href="/dashboard/config/ajuda">💬 Ajuda</a>
     </div>
   );
 }

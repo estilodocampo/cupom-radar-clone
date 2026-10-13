@@ -83,7 +83,7 @@ export default function Overview() {
     <div className="dash">
       <div className="dash-hello">
         <h1 className="h1" style={{ margin: 0 }}>{greeting()}, {first} 👋</h1>
-        <p className="sub" style={{ margin: 0 }}>Seu centro de operação: conexões, regras e últimas ofertas.</p>
+        <p className="sub" style={{ margin: 0 }}>Conexões, regras e ofertas.</p>
       </div>
 
       <div className="op-status">
@@ -124,8 +124,8 @@ export default function Overview() {
       {rulesTotal === 0 && (
         <div className="empty">
           <span className="empty-ico">📑</span>
-          <p><b>Nenhuma regra ainda.</b><br />Crie um Copiador para começar a replicar ofertas.</p>
-          <a className="btn btn-primary btn-sm" href="/dashboard/postagens/copiador">Criar copiador</a>
+          <p><b>Sem regras.</b><br />Crie um Copiador para começar.</p>
+          <a className="btn btn-primary btn-sm" href="/dashboard/postagens/copiador">Criar</a>
         </div>
       )}
       {cop.slice(0, 2).map((c) => (
@@ -150,8 +150,8 @@ export default function Overview() {
       {offers.length === 0 && (
         <div className="empty">
           <span className="empty-ico">🚀</span>
-          <p><b>Nenhum disparo ainda.</b><br />As ofertas enviadas aparecem aqui com foto, preço e hora.</p>
-          <a className="btn btn-primary btn-sm" href="/dashboard/postagens/produtos">Gerar oferta</a>
+          <p><b>Nada enviado ainda.</b></p>
+          <a className="btn btn-primary btn-sm" href="/dashboard/postagens/produtos">Criar oferta</a>
         </div>
       )}
       {offers.map((o, i) => {

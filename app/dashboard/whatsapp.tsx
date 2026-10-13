@@ -53,36 +53,36 @@ export default function Whatsapp() {
   return (
     <div className="grid" style={{ gridTemplateColumns: '1fr', maxWidth: 720 }}>
       <div className="card">
-        <h3>📲 Conexão WhatsApp</h3>
+        <h3>📲 Conexão</h3>
         <p>
-          {status == null ? 'Verificando...' : status.connected
+          {status == null ? '…' : status.connected
             ? <><span className="badge badge-ok">Conectado</span> <span className="hint">{status.phone || ''}</span></>
-            : <><span className="badge badge-warn">Desconectado</span> <span className="hint">escaneie o QR abaixo</span></>}
+            : <><span className="badge badge-warn">Desconectado</span> <span className="hint">escaneie o QR</span></>}
         </p>
         {!status?.connected && qr && <div className="qr-box"><img src={qr} alt="QR WhatsApp" /></div>}
-        <div style={{ marginTop: 12 }}><button className="btn btn-ghost btn-sm" onClick={load}>Atualizar status</button></div>
+        <div style={{ marginTop: 12 }}><button className="btn btn-ghost btn-sm" onClick={load}>Atualizar</button></div>
       </div>
 
       <div className="card">
-        <h3>📤 Enviar / agendar oferta</h3>
+        <h3>📤 Enviar</h3>
         <label className="lbl">Grupo</label>
         <select className="input" value={to} onChange={(e) => setTo(e.target.value)}>
-          <option value="">Selecione o grupo...</option>
+          <option value="">Selecione...</option>
           {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        <input className="input" value={to} onChange={(e) => setTo(e.target.value)} placeholder="Ou cole o JID do grupo" />
+        <input className="input" value={to} onChange={(e) => setTo(e.target.value)} placeholder="Ou cole o JID" />
         <label className="lbl">Mensagem</label>
-        <textarea className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Cole aqui o texto gerado na aba Gerar oferta" rows={4} />
-        <label className="lbl">Agendar para (opcional p/ envio imediato)</label>
+        <textarea className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Texto da oferta" rows={4} />
+        <label className="lbl">Agendar para</label>
         <input className="input" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
         {text.trim() !== '' && (
           <>
-            <label className="lbl">Prévia no WhatsApp</label>
+            <label className="lbl">Prévia</label>
             <WaPreview text={text} />
           </>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-primary" onClick={sendTest}>Enviar agora</button>
+          <button className="btn btn-primary" onClick={sendTest}>Enviar</button>
           <button className="btn btn-ghost" onClick={schedule}>Agendar</button>
         </div>
         {msg && <p>{msg}</p>}
@@ -90,14 +90,14 @@ export default function Whatsapp() {
 
       <div className="card">
         <h3>⏰ Agendados</h3>
-        {sched.length === 0 ? <Empty icon="⏰" text="Agende uma oferta acima para vê-la aqui antes do disparo." /> : (
+        {sched.length === 0 ? <Empty icon="⏰" text="Nada agendado." /> : (
           <ul className="list">{sched.map((s) => <li key={s.id}><b>{new Date(s.scheduledAt).toLocaleString()}</b> — {s.groupName || s.groupJid} — <span className="badge badge-info">{s.status}</span></li>)}</ul>
         )}
       </div>
 
       <div className="card">
-        <h3>📜 Histórico de disparos</h3>
-        {logs.length === 0 ? <Empty icon="📜" text="Envie a primeira oferta para ver o histórico aqui." /> : (
+        <h3>📜 Histórico</h3>
+        {logs.length === 0 ? <Empty icon="📜" text="Nada enviado ainda." /> : (
           <ul className="list">{logs.map((l) => <li key={l.id}><b>{new Date(l.sentAt).toLocaleString()}</b> — {l.groupJid} — <span className={`badge ${l.status === 'sent' ? 'badge-ok' : 'badge-err'}`}>{l.status}</span>{l.error ? ` (${l.error})` : ''}</li>)}</ul>
         )}
       </div>

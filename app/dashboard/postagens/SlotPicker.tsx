@@ -12,7 +12,7 @@ export function SlotPicker({ slot, setSlot, phones }: { slot: Slot; setSlot: (s:
           className={`tab${slot === s ? ' active' : ''}`}
           onClick={() => setSlot(s)}
         >
-          📱 {i + 1}{phones[s] ? ` (${phones[s]})` : ''}
+          📱 {i + 1}{phones[s] ? ` · …${phones[s].slice(-4)}` : ''}
         </button>
       ))}
     </div>

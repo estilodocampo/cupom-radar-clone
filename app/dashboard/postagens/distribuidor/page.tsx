@@ -11,18 +11,18 @@ type Rule = {
 };
 
 const INTERVALS = [
-  { v: 0, l: 'Sem limite (toda mensagem)' },
-  { v: 5, l: 'No máximo 1 a cada 5 min' },
-  { v: 15, l: 'No máximo 1 a cada 15 min' },
-  { v: 30, l: 'No máximo 1 a cada 30 min' },
-  { v: 60, l: 'No máximo 1 por hora' },
-  { v: 180, l: 'No máximo 1 a cada 3 horas' },
-  { v: 1440, l: 'No máximo 1 por dia' },
+  { v: 0, l: 'Sem limite' },
+  { v: 5, l: '1 a cada 5 min' },
+  { v: 15, l: '1 a cada 15 min' },
+  { v: 30, l: '1 a cada 30 min' },
+  { v: 60, l: '1 por hora' },
+  { v: 180, l: '1 a cada 3 horas' },
+  { v: 1440, l: '1 por dia' },
 ];
 
 const MAXES = [0, 1, 2, 3, 5, 10, 20, 50];
 const DEDUP = [
-  { v: 0, l: 'Não bloquear' },
+  { v: 0, l: 'Sem bloqueio' },
   { v: 6, l: '6 horas' },
   { v: 24, l: '24 horas' },
   { v: 72, l: '3 dias' },
@@ -105,9 +105,9 @@ export default function Distribuidor() {
   }
 
   async function save(pausadoOver?: boolean) {
-    if (!hub.endsWith('@g.us')) { setMsg('❌ Selecione o SEU grupo (o hub).'); return; }
+    if (!hub.endsWith('@g.us')) { setMsg('❌ Selecione o hub.'); return; }
     const all = targetsAtuais();
-    if (!all.length) { setMsg('❌ Selecione ao menos um grupo para receber.'); return; }
+    if (!all.length) { setMsg('❌ Selecione ao menos um destino.'); return; }
     const res = await fetch('/api/distribuidor/rules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -122,11 +122,11 @@ export default function Distribuidor() {
     if (pausadoOver !== undefined) setPausado(pausadoOver);
     resetForm();
     load();
-    setMsg('✅ Regra salva! Tudo que passar pelo hub será repassado.');
+    setMsg('✅ Salva!');
   }
 
   async function remove(id: string) {
-    if (!confirm('Excluir esta regra de distribuição?')) return;
+    if (!confirm('Excluir?')) return;
     await fetch(`/api/distribuidor/rules?id=${id}`, { method: 'DELETE' });
     load();
   }
@@ -135,57 +135,52 @@ export default function Distribuidor() {
 
   return (
     <>
-      <a className="back" href="/dashboard/postagens">← Postagens</a>
-      <div className="eyebrow">● DISTRIBUIDOR</div>
       <h1 className="h1">Distribuidor</h1>
-      <p className="sub">Uma regra por hub: do seu grupo para os demais, com as suas regras.</p>
+      <p className="sub">Hub → demais grupos.</p>
       {msg && <p>{msg}</p>}
 
-      <label className="lbl">Número que distribui</label>
       <SlotPicker slot={slot} setSlot={changeSlot} phones={phones} />
 
       <div className="card" style={{ maxWidth: 720 }}>
-        <h3>{editing ? 'Editar regra' : 'Nova regra'}</h3>
-        <label className="lbl">Nome (opcional)</label>
+        <h3>{editing ? 'Editar' : 'Nova regra'}</h3>
+        <label className="lbl">Nome</label>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Country wa1" />
 
         <div className="dash-section" style={{ marginTop: 12 }}>
-          <div className="dash-eyebrow">1 · ENTRADA</div>
+          <div className="dash-eyebrow">1 · ORIGEM</div>
         </div>
-        <label className="lbl">Seu grupo (hub) — o que passa aqui é distribuído</label>
+        <label className="lbl">Hub</label>
         <select className="input" value={hub} onChange={(e) => { setHub(e.target.value); setPicked((p) => p.filter((x) => x !== e.target.value)); }}>
-          <option value="">Selecione seu grupo...</option>
+          <option value="">Selecione...</option>
           {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => loadGroups(slot)}>↻ Recarregar grupos do 📱 {slot === 'wa1' ? '1' : '2'}</button>
-        <p className="hint">O Modo Copiador pode alimentar este grupo automaticamente a partir da fonte.</p>
+        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => loadGroups(slot)}>↻ Grupos</button>
 
         <div className="dash-section">
-          <div className="dash-eyebrow">2 · SAÍDA</div>
+          <div className="dash-eyebrow">2 · DESTINOS</div>
         </div>
-        <label className="lbl">Grupos que recebem</label>
         {groups.map((g) => (
           <label key={g.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0', opacity: g.id === hub ? .45 : 1 }}>
             <input type="checkbox" disabled={g.id === hub} checked={picked.includes(g.id)} onChange={() => toggle(g.id)} />
-            {g.name} {g.id === hub && <span className="badge">seu hub</span>}
+            {g.name} {g.id === hub && <span className="badge">hub</span>}
           </label>
         ))}
-        <textarea className="input" rows={2} style={{ marginTop: 8 }} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="JIDs extras, um por linha (opcional)" />
+        <textarea className="input" rows={2} style={{ marginTop: 8 }} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="JIDs extras (opcional)" />
 
         <div className="dash-section">
           <div className="dash-eyebrow">3 · REGRAS</div>
         </div>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} /> Repassar só o que <b>eu</b> posto
+          <input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} /> Só minhas
         </label>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6 }}>
-          <input type="checkbox" checked={requireLink} onChange={(e) => setRequireLink(e.target.checked)} /> Repassar apenas mensagens com link
+          <input type="checkbox" checked={requireLink} onChange={(e) => setRequireLink(e.target.checked)} /> Só com link
         </label>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6 }}>
-          <input type="checkbox" checked={convert} onChange={(e) => setConvert(e.target.checked)} /> Converter links para o meu afiliado
+          <input type="checkbox" checked={convert} onChange={(e) => setConvert(e.target.checked)} /> Converter links
         </label>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6 }}>
-          <input type="checkbox" checked={stripCoupons} onChange={(e) => setStripCoupons(e.target.checked)} /> Remover cupons
+          <input type="checkbox" checked={stripCoupons} onChange={(e) => setStripCoupons(e.target.checked)} /> Sem cupons
         </label>
 
         <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
@@ -196,40 +191,35 @@ export default function Distribuidor() {
             </select>
           </div>
           <div style={{ flex: '1 1 150px' }}>
-            <label className="lbl">Máx. por dia</label>
+            <label className="lbl">Por dia</label>
             <select className="input" value={maxPerDay} onChange={(e) => setMaxPerDay(Number(e.target.value))}>
               {MAXES.map((n) => <option key={n} value={n}>{n === 0 ? 'Sem limite' : n}</option>)}
             </select>
           </div>
           <div style={{ flex: '1 1 170px' }}>
-            <label className="lbl">Não repetir a mesma oferta</label>
+            <label className="lbl">Não repetir</label>
             <select className="input" value={dedupHoras} onChange={(e) => setDedupHoras(Number(e.target.value))}>
               {DEDUP.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
             </select>
           </div>
         </div>
 
-        <label className="lbl" style={{ marginTop: 12 }}>Texto antes de cada mensagem (opcional)</label>
+        <label className="lbl" style={{ marginTop: 12 }}>Texto antes</label>
         <input className="input" value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="🔥 ACHADINHO DO DIA" />
-        <label className="lbl">Texto depois de cada mensagem (opcional)</label>
-        <input className="input" value={suffix} onChange={(e) => setSuffix(e.target.value)} placeholder="Compre pelo link e receba comissão" />
+        <label className="lbl">Texto depois</label>
+        <input className="input" value={suffix} onChange={(e) => setSuffix(e.target.value)} placeholder="Compre pelo link" />
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary btn-sm" onClick={() => save()}>{editing ? 'Atualizar regra' : 'Criar regra'}</button>
+          <button className="btn btn-primary btn-sm" onClick={() => save()}>{editing ? 'Salvar' : 'Criar'}</button>
         </div>
-        <p className="hint" style={{ marginTop: 8 }}>
-          Trava anti-loop ativa: nunca repassa a partir de um grupo que já recebe, e nunca devolve ao seu hub. O worker aplica em até 60s.
-        </p>
-        <p className="hint">✍️ Post manual seu no hub sai na hora (fura a janela de frequência) e conta na cota diária. O motivo de cada descarte aparece no log do worker.</p>
-        <p className="hint">🗑️ Apagou no seu grupo? As cópias saem dos demais automaticamente (dentro da janela do WhatsApp, ~2 dias).</p>
       </div>
 
       <div style={{ marginTop: 16, maxWidth: 720 }}>
-        {mine.length === 0 && <Empty icon="🔀" text="Crie a primeira regra acima para distribuir deste número." actionLabel="Criar regra" onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />}
+        {mine.length === 0 && <Empty icon="🔀" text="Crie a primeira regra para distribuir." actionLabel="Criar" onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />}
         {mine.map((r) => (
           <div className="card" key={r.id} style={{ marginBottom: 8 }}>
             <b>{r.name || 'Distribuição'}</b> {r.pausado ? <span className="badge badge-err">PAUSADO</span> : <span className="badge badge-ok">ATIVO</span>}
-            <p className="hint">{gname(r.hub)} → {r.targets.length} grupo(s){r.minInterval ? ` · 1/${r.minInterval}min` : ''}{r.maxPerDay ? ` · máx ${r.maxPerDay}/dia` : ''}</p>
+            <p className="hint">{gname(r.hub)} → {r.targets.length}{r.minInterval ? ` · 1/${r.minInterval}min` : ''}{r.maxPerDay ? ` · máx ${r.maxPerDay}/dia` : ''}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-ghost btn-sm" onClick={() => edit(r)}>Editar</button>
               <button

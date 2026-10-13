@@ -68,7 +68,7 @@ export default function Sorteio() {
   }
 
   function draw() {
-    if (!members.length) { setMsg('❌ Carregue os membros primeiro.'); return; }
+    if (!members.length) { setMsg('❌ Carregue os membros.'); return; }
     const w = members[Math.floor(Math.random() * members.length)];
     setWinner(w.id);
     setMsg('');
@@ -82,7 +82,7 @@ export default function Sorteio() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: groupJid, text: `🎉 SORTEIO 🎉\n\nParabéns +${num}! Você foi o ganhador(a)! 🏆`, slot }),
     }).then((x) => x.json());
-    setMsg(r.ok ? '✅ Vencedor anunciado no grupo!' : `❌ ${r.error}`);
+    setMsg(r.ok ? '✅ Anunciado!' : `❌ ${r.error}`);
   }
 
   function toggleBv(id: string) {
@@ -90,44 +90,39 @@ export default function Sorteio() {
   }
 
   async function saveBv() {
-    if (!bvTargets.length) { setMsg('❌ Selecione ao menos um grupo para as boas-vindas.'); return; }
+    if (!bvTargets.length) { setMsg('❌ Selecione um grupo.'); return; }
     await fetch('/api/integrations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ provider: 'boasvindas', config: { targets: bvTargets, text: bvText, slot } }),
     });
-    setMsg('✅ Boas-vindas ativas! Novos membros serão recebidos automaticamente.');
+    setMsg('✅ Ativo!');
   }
 
   return (
     <>
-      <a className="back" href="/dashboard/postagens">← Postagens</a>
-      <div className="eyebrow">● SORTEIO</div>
-      <h1 className="h1">Sorteio + Boas-vindas</h1>
-      <p className="sub">Sorteie membros e ative boas-vindas automáticas.</p>
+      <h1 className="h1">Sorteio</h1>
       {msg && <p>{msg}</p>}
 
       <div className="card" style={{ maxWidth: 720 }}>
-        <h3>🎉 Sortear membro</h3>
-        <label className="lbl">Número</label>
+        <h3>🎉 Sortear</h3>
         <SlotPicker slot={slot} setSlot={changeSlot} phones={phones} />
         <label className="lbl">Grupo</label>
         <select className="input" value={groupJid} onChange={(e) => loadMembers(e.target.value)}>
           <option value="">Selecione...</option>
           {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        {groups.length === 0 && <Empty icon="👥" text="Conecte o WhatsApp e entre em grupos com este número para sortear." actionLabel="Conectar WhatsApp" actionHref="/dashboard/robo" />}
-        {groupJid && <p className="hint">{members.length} membros carregados.</p>}
+        {groups.length === 0 && <Empty icon="👥" text="Entre em grupos com este número para sortear." actionLabel="Conectar" actionHref="/dashboard/robo" />}
+        {groupJid && <p className="hint">{members.length} membros.</p>}
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={draw}>🎲 Sortear</button>
-          {winner && <button className="btn btn-ghost btn-sm" onClick={announce}>📢 Anunciar no grupo</button>}
+          {winner && <button className="btn btn-ghost btn-sm" onClick={announce}>📢 Anunciar</button>}
         </div>
-        {winner && <p style={{ marginTop: 8 }}>🏆 Vencedor: <b>{mask(winner)}</b></p>}
+        {winner && <p style={{ marginTop: 8 }}>🏆 <b>{mask(winner)}</b></p>}
       </div>
 
       <div className="card" style={{ maxWidth: 720, marginTop: 12 }}>
-        <h3>👋 Boas-vindas automáticas</h3>
-        <p className="hint">Todo membro novo recebe esta mensagem com menção.</p>
+        <h3>👋 Boas-vindas</h3>
         <label className="lbl">Grupos</label>
         {groups.map((g) => (
           <label key={g.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0' }}>
@@ -136,7 +131,7 @@ export default function Sorteio() {
         ))}
         <label className="lbl" style={{ marginTop: 8 }}>Mensagem</label>
         <textarea className="input" rows={3} value={bvText} onChange={(e) => setBvText(e.target.value)} />
-        <button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={saveBv}>Salvar boas-vindas</button>
+        <button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={saveBv}>Salvar</button>
       </div>
     </>
   );

@@ -2,11 +2,11 @@
 import { useEffect, useState } from 'react';
 
 const STORES = [
-  { id: 'shopee', name: 'Shopee', desc: 'Suas credenciais da API de afiliados.', field: 'ID de afiliado Shopee (af_id)' },
-  { id: 'amazon', name: 'Amazon', desc: 'Sua conta de afiliado via Creators API.', field: 'Tag de afiliado (tag)' },
-  { id: 'magalu', name: 'Magalu', desc: 'O identificador da sua vitrine de afiliado.', field: 'ID da vitrine' },
-  { id: 'mercadolivre', name: 'Mercado Livre', desc: 'Seu cookie para gerar links com sua tag.', field: 'Tag de afiliado' },
-  { id: 'shein', name: 'SHEIN', desc: 'Seu identificador de afiliado SHEIN.', field: 'ID de afiliado' },
+  { id: 'shopee', name: 'Shopee', desc: 'API de afiliados.', field: 'af_id' },
+  { id: 'amazon', name: 'Amazon', desc: 'Creators API.', field: 'tag' },
+  { id: 'magalu', name: 'Magalu', desc: 'ID da vitrine.', field: 'ID da vitrine' },
+  { id: 'mercadolivre', name: 'Mercado Livre', desc: 'Tag de afiliado.', field: 'Tag' },
+  { id: 'shein', name: 'SHEIN', desc: 'ID de afiliado.', field: 'ID' },
 ];
 
 type Modal = null | { type: 'whatsapp'; slot: 'wa1' | 'wa2' } | { type: 'store'; store: string } | { type: 'template' } | { type: 'coupon' } | { type: 'hooks' };
@@ -66,10 +66,10 @@ export default function Robo() {
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get('ml');
-    if (q === 'ok') alert('✅ Conta Mercado Livre conectada!');
-    else if (q === 'negado') alert('❌ Autorização negada no Mercado Livre.');
-    else if (q === 'erro_token') alert('❌ ML aprovou, mas a troca do token falhou (confira APP ID/Secret e URI de redirect).');
-    else if (q) alert(`❌ Falha na conexão ML (${q}). Tente de novo.`);
+    if (q === 'ok') alert('✅ ML conectada!');
+    else if (q === 'negado') alert('❌ ML negada.');
+    else if (q === 'erro_token') alert('❌ Falha no token ML.');
+    else if (q) alert(`❌ ML: ${q}`);
   }, []);
 
   async function save(provider: string, config: Record<string, unknown>) {
@@ -81,7 +81,7 @@ export default function Robo() {
   const storeCfg = (id: string) => STORES.find((s) => s.id === id)!;
 
   async function unlink(slot: 'wa1' | 'wa2') {
-    if (!confirm(`Desvincular o WhatsApp ${slot === 'wa1' ? '1' : '2'}? Será preciso escanear o QR de novo.`)) return;
+    if (!confirm(`Desvincular o nº ${slot === 'wa1' ? '1' : '2'}? Vai precisar do QR.`)) return;
     await fetch('/api/whatsapp/unlink', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot }) });
     setModal(null);
     load();
@@ -93,26 +93,24 @@ export default function Robo() {
       <div className="chan-top"><span className="chan-ico" style={{ background: '#12332a' }}>💬</span> Grupos de ofertas</div>
       <h3>WhatsApp {n}</h3>
       <p>{locked
-        ? 'Exclusivo do plano Master — faça upgrade para conectar o 2º número.'
-        : wa[slot]?.connected ? `Conectado (${wa[slot].phone || ''}) ✓` : 'Conecte seu número para compartilhar ofertas nos seus grupos.'}</p>
-      <div className="chan-foot"><button onClick={() => { if (locked) { window.location.href = '/dashboard/planos'; return; } setModal({ type: 'whatsapp', slot }); load(); }}>{locked ? 'Ver planos' : 'Gerenciar conexão'}</button><a href="/dashboard/postagens">↗</a></div>
+        ? 'Plano Master: 2º número.'
+        : wa[slot]?.connected ? `Conectado (${wa[slot].phone || ''}) ✓` : 'Conecte para enviar nos grupos.'}</p>
+      <div className="chan-foot"><button onClick={() => { if (locked) { window.location.href = '/dashboard/planos'; return; } setModal({ type: 'whatsapp', slot }); load(); }}>{locked ? 'Ver planos' : 'Gerenciar'}</button><a href="/dashboard/postagens">↗</a></div>
     </div>
   );
 
   return (
     <>
-      <a className="back" href="/dashboard">← Voltar para o Dashboard</a>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
         <div>
-          <div className="eyebrow">● SEU ESPAÇO DE TRABALHO</div>
-          <h1 className="h1">Configurações</h1>
-          <p className="sub">Conecte suas contas e deixe suas ofertas com a sua identidade.</p>
+          <h1 className="h1">Robô</h1>
+          <p className="sub">WhatsApp, lojas e formato.</p>
         </div>
         <div className="orbit" style={{ flexShrink: 0 }}><span>☰</span></div>
       </div>
 
       <div className="step">
-        <div className="step-num">01<span className="step-rule" /><b>Canais de envio</b>O caminho entre suas ofertas e o seu público.<span className="step-cap">💬 Conecte suas conversas</span></div>
+        <div className="step-num">01<span className="step-rule" /><b>WhatsApp</b></div>
         <div className="step-cards">
           {waCard('wa1', '1', false)}
           {waCard('wa2', '2', plan !== '' && plan !== 'master')}
@@ -120,7 +118,7 @@ export default function Robo() {
       </div>
 
       <div className="step">
-        <div className="step-num">02<span className="step-rule" /><b>Lojas e afiliação</b>Suas credenciais e links de afiliado, reunidos aqui.<span className="step-cap">🏬 Conecte suas lojas</span></div>
+        <div className="step-num">02<span className="step-rule" /><b>Lojas</b></div>
         <div className="step-cards">
           {STORES.map((s) => (
             <div className="chan" key={s.id}>
@@ -134,47 +132,41 @@ export default function Robo() {
       </div>
 
       <div className="step">
-        <div className="step-num">03<span className="step-rule" /><b>Do seu jeito</b>Os detalhes que tornam cada postagem sua.<span className="step-cap">✨ Personalize suas ofertas</span></div>
+        <div className="step-num">03<span className="step-rule" /><b>Formato</b></div>
         <div className="step-cards">
           <div className="chan">
             <div className="chan-top"><span className="chan-ico" style={{ background: '#12294d' }}>💬</span></div>
-            <h3>Mensagens personalizadas</h3>
-            <p>Defina o formato e o tom das suas postagens.</p>
+            <h3>Modelo</h3>
             <div className="chan-foot"><button onClick={() => setModal({ type: 'template' })}>Configurar</button><span>›</span></div>
           </div>
           <div className="chan">
             <div className="chan-top"><span className="chan-ico" style={{ background: '#12332a' }}>🎟️</span></div>
             <h3>Cupons</h3>
-            <p>Adicione os cupons de cada loja às suas ofertas.</p>
             <div className="chan-foot"><button onClick={() => setModal({ type: 'coupon' })}>Configurar</button><span>›</span></div>
           </div>
           <div className="chan">
             <div className="chan-top"><span className="chan-ico" style={{ background: '#3a2a10' }}>📢</span></div>
-            <h3>Ganchos personalizados</h3>
-            <p>Crie chamadas que dão destaque às suas ofertas.</p>
+            <h3>Ganchos</h3>
             <div className="chan-foot"><button onClick={() => setModal({ type: 'hooks' })}>Configurar</button><span>›</span></div>
           </div>
           <div className="chan">
             <div className="chan-top"><span className="chan-ico" style={{ background: '#2a1a3d' }}>📅</span></div>
-            <h3>Agendamentos WhatsApp</h3>
-            <p>Organize as próximas publicações nos seus grupos.</p>
+            <h3>Fila</h3>
             <div className="chan-foot"><a href="/dashboard/postagens/fila">Abrir</a><span>›</span></div>
           </div>
         </div>
       </div>
-
-      <p className="hint" style={{ marginTop: 8 }}>Precisa de uma mão para configurar? <a href="/dashboard/config/ajuda">Acessar a Central de Ajuda ↗</a></p>
 
       {modal && (
         <div className="overlay" onClick={() => setModal(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             {modal.type === 'whatsapp' && (
               <>
-                <h3>💬 Conectar WhatsApp {modal.slot === 'wa2' ? '2' : '1'}</h3>
-                <p className="hint">{wa[modal.slot]?.connected ? `Conectado (${wa[modal.slot].phone})` : wa[modal.slot]?.qrError || 'Escaneie o QR com o celular:'}</p>
-                {!wa[modal.slot]?.connected && wa[modal.slot]?.qr && <div className="qr-box"><img src={wa[modal.slot].qr!} alt="QR WhatsApp" /></div>}
+                <h3>💬 WhatsApp {modal.slot === 'wa2' ? '2' : '1'}</h3>
+                <p className="hint">{wa[modal.slot]?.connected ? `Conectado (${wa[modal.slot].phone})` : wa[modal.slot]?.qrError || 'Escaneie o QR:'}</p>
+                {!wa[modal.slot]?.connected && wa[modal.slot]?.qr && <div className="qr-box"><img src={wa[modal.slot].qr!} alt="QR" /></div>}
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                  <button className="btn btn-ghost btn-sm" onClick={load}>Atualizar QR</button>
+                  <button className="btn btn-ghost btn-sm" onClick={load}>Atualizar</button>
                   {wa[modal.slot]?.connected && <button className="btn btn-ghost btn-sm" onClick={() => unlink(modal.slot)}>Desvincular</button>}
                   <button className="btn btn-primary btn-sm" onClick={() => setModal(null)}>Fechar</button>
                 </div>
@@ -189,7 +181,7 @@ export default function Robo() {
                   <>
                     <label className="lbl">Matt Tool ID</label>
                     <input className="input" value={mlMatt} onChange={(e) => setMlMatt(e.target.value)} placeholder="Ex: 78793736" />
-                    <p className="hint">Gere qualquer link no Gerador de links do painel ML e copie o valor de <b>matt_tool</b> dele.</p>
+                    <p className="hint">Copie o <b>matt_tool</b> do Gerador de links ML.</p>
                   </>
                 )}
                 {modal.store === 'shopee' && (
@@ -198,11 +190,11 @@ export default function Robo() {
                     <input className="input" value={shAppId} onChange={(e) => setShAppId(e.target.value)} placeholder="App ID" />
                     <label className="lbl">Secret da API</label>
                     <input className="input" value={shSecret} onChange={(e) => setShSecret(e.target.value)} placeholder="Secret" type="password" />
-                    <p className="hint">Com App ID + Secret, os links saem como shope.ee comissionáveis via API oficial.</p>
+                    <p className="hint">Gera links shope.ee comissionáveis.</p>
                   </>
                 )}
                 {modal.store === 'mercadolivre' && (
-                  <p className="hint">Conta ML: {mlOk ? 'conectada ✓' : 'não conectada'} — <a href="/api/integrations/mercadolivre/auth">Conectar conta</a> (exige APP ID e Secret cadastrados no servidor)</p>
+                  <p className="hint">ML: {mlOk ? 'conectada ✓' : 'desconectada'} — <a href="/api/integrations/mercadolivre/auth">Conectar</a></p>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-primary btn-sm" onClick={async () => {
@@ -217,8 +209,8 @@ export default function Robo() {
             )}
             {modal.type === 'template' && (
               <>
-                <h3>💬 Mensagem personalizada</h3>
-                <p className="hint">Use {'{titulo} {preco} {link} {link2} {cupom}'}.</p>
+                <h3>💬 Modelo</h3>
+                <p className="hint">{'{titulo} {preco} {link} {link2} {cupom}'}</p>
                 <select className="input" value={tplStore} onChange={(e) => { setTplStore(e.target.value); setTplText(tplMap[e.target.value] || ''); }}>
                   {STORES.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
@@ -231,7 +223,7 @@ export default function Robo() {
             )}
             {modal.type === 'coupon' && (
               <>
-                <h3>🎟️ Cupom da loja</h3>
+                <h3>🎟️ Cupom</h3>
                 <select className="input" value={cpStore} onChange={(e) => { setCpStore(e.target.value); setCpText(cpMap[e.target.value] || ''); }}>
                   {STORES.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>

@@ -57,8 +57,8 @@ export default function Copiador() {
   }
 
   async function save() {
-    if (!source.endsWith('@g.us')) { setMsg('❌ Cole o JID do grupo de origem.'); return; }
-    if (!hub.endsWith('@g.us')) { setMsg('❌ Selecione o grupo hub.'); return; }
+    if (!source.endsWith('@g.us')) { setMsg('❌ JID da origem.'); return; }
+    if (!hub.endsWith('@g.us')) { setMsg('❌ Selecione o hub.'); return; }
     const res = await fetch('/api/copiador/rules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -68,11 +68,11 @@ export default function Copiador() {
     if (!res.ok) { setMsg(`❌ ${d.error || 'Falha ao salvar'}`); return; }
     resetForm();
     load();
-    setMsg('✅ Regra salva! Ofertas da origem chegam convertidas no hub.');
+    setMsg('✅ Salva!');
   }
 
   async function remove(id: string) {
-    if (!confirm('Excluir esta regra de cópia?')) return;
+    if (!confirm('Excluir?')) return;
     await fetch(`/api/copiador/rules?id=${id}`, { method: 'DELETE' });
     load();
   }
@@ -81,47 +81,43 @@ export default function Copiador() {
 
   return (
     <>
-      <a className="back" href="/dashboard/postagens">← Postagens</a>
-      <div className="eyebrow">● MODO COPIADOR</div>
-      <h1 className="h1">Modo Copiador</h1>
-      <p className="sub">Uma regra por origem: cada grupo de origem alimenta o seu hub, já com o seu link.</p>
+      <h1 className="h1">Copiador</h1>
+      <p className="sub">Origem → hub, já com seu link.</p>
       {msg && <p>{msg}</p>}
 
-      <label className="lbl">Número que monitora</label>
       <SlotPicker slot={slot} setSlot={changeSlot} phones={phones} />
 
       <div className="card" style={{ maxWidth: 720 }}>
-        <h3>{editing ? 'Editar regra' : 'Nova regra de cópia'}</h3>
-        <label className="lbl">Nome (opcional)</label>
+        <h3>{editing ? 'Editar' : 'Nova regra'}</h3>
+        <label className="lbl">Nome</label>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Achados Cuiudos" />
-        <label className="lbl">Grupo de origem (JID)</label>
+        <label className="lbl">Origem</label>
         <input className="input" value={source} onChange={(e) => setSource(e.target.value)} placeholder="1203...@g.us (grupo da fonte)" />
-        <p className="hint">O número 📱 {slot === 'wa1' ? '1' : '2'} precisa ser membro do grupo de origem.</p>
-        <label className="lbl">Grupo hub (seu grupo que recebe)</label>
+        <label className="lbl">Hub</label>
         <select className="input" value={hub} onChange={(e) => setHub(e.target.value)}>
-          <option value="">Selecione seu grupo...</option>
+          <option value="">Selecione...</option>
           {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => loadGroups(slot)}>↻ Recarregar grupos do 📱 {slot === 'wa1' ? '1' : '2'}</button>
-        <input className="input" style={{ marginTop: 8 }} value={hub} onChange={(e) => setHub(e.target.value)} placeholder="Ou cole o JID do hub" />
+        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => loadGroups(slot)}>↻ Grupos</button>
+        <input className="input" style={{ marginTop: 8 }} value={hub} onChange={(e) => setHub(e.target.value)} placeholder="Ou cole o JID" />
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-          <input type="checkbox" checked={keepCoupons} onChange={(e) => setKeepCoupons(e.target.checked)} /> Manter cupons da origem
+          <input type="checkbox" checked={keepCoupons} onChange={(e) => setKeepCoupons(e.target.checked)} /> Manter cupons
         </label>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6 }}>
-          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Regra ativa
+          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Ativa
         </label>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button className="btn btn-primary btn-sm" onClick={save}>{editing ? 'Atualizar' : 'Criar regra'}</button>
+          <button className="btn btn-primary btn-sm" onClick={save}>{editing ? 'Salvar' : 'Criar'}</button>
           {editing && <button className="btn btn-ghost btn-sm" onClick={resetForm}>Cancelar</button>}
         </div>
       </div>
 
       <div style={{ marginTop: 16, maxWidth: 720 }}>
-        {mine.length === 0 && <Empty icon="📑" text="Crie a primeira regra acima para começar a copiar ofertas neste número." actionLabel="Criar regra" onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />}
+        {mine.length === 0 && <Empty icon="📑" text="Crie a primeira regra para copiar neste número." actionLabel="Criar" onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />}
         {mine.map((r) => (
           <div className="card" key={r.id} style={{ marginBottom: 8 }}>
             <b>{r.name || 'Cópia'}</b> {r.active ? <span className="badge badge-ok">ativa</span> : <span className="badge">pausada</span>}
-            <p className="hint">{r.source.slice(0, 18)}… → {gname(r.hub)}{r.keepCoupons ? ' · mantém cupons' : ''}</p>
+            <p className="hint">{r.source.slice(0, 18)}… → {gname(r.hub)}{r.keepCoupons ? ' · +cupons' : ''}</p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => edit(r)}>Editar</button>
               <button className="btn btn-ghost btn-sm" onClick={() => remove(r.id)}>Excluir</button>

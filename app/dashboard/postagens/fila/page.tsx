@@ -23,14 +23,11 @@ export default function Fila() {
   const pending = items.filter((x) => x.status === 'pending');
   return (
     <>
-      <a className="back" href="/dashboard/postagens">← Postagens</a>
-      <div className="eyebrow">● MODO FILA</div>
-      <h1 className="h1">Modo Fila</h1>
-      <p className="sub">Ofertas na fila disparam em sequência pelo worker. Adiante qualquer item manualmente.</p>
+      <h1 className="h1">Fila</h1>
       <div className="card" style={{ maxWidth: 720 }}>
-        {pending.length === 0 ? <Empty icon="📋" text="Agende uma oferta para vê-la aqui antes do disparo." actionLabel="Gerar oferta" actionHref="/dashboard/postagens/produtos" /> : (
+        {pending.length === 0 ? <Empty icon="📋" text="Agende uma oferta para vê-la aqui." actionLabel="Criar" actionHref="/dashboard/postagens/produtos" /> : (
           <ul className="list">{pending.map((s, i) => (
-            <li key={s.id}><b>#{i + 1} {new Date(s.scheduledAt).toLocaleString()}</b> — {s.groupName || s.groupJid} <button className="btn btn-primary btn-sm" style={{ marginLeft: 8 }} onClick={() => sendNow(s.id)}>Disparar agora</button></li>
+            <li key={s.id}><b>#{i + 1} {new Date(s.scheduledAt).toLocaleString()}</b> — {s.groupName || s.groupJid} <button className="btn btn-primary btn-sm" style={{ marginLeft: 8 }} onClick={() => sendNow(s.id)}>Disparar</button></li>
           ))}</ul>
         )}
       </div>
