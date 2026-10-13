@@ -58,7 +58,7 @@ export default function Overview() {
     fetch('/api/whatsapp/status').then((r) => r.json()).then((d) => setSlots(d?.slots || {})).catch(() => {});
     fetch('/api/copiador/rules').then((r) => r.json()).then((d) => setCop(d?.items || [])).catch(() => {});
     fetch('/api/distribuidor/rules').then((r) => r.json()).then((d) => setDis(d?.items || [])).catch(() => {});
-    fetch('/api/dispatches').then((r) => r.json()).then((d) => setOffers((d?.items || []).slice(0, 3))).catch(() => {});
+    fetch('/api/dispatches').then((r) => r.json()).then((d) => setOffers(((d?.items || []) as Dispatch[]).filter((o) => (o.status || 'sent') === 'sent').slice(0, 3))).catch(() => {});
     (async () => {
       const map: Record<string, string> = {};
       for (const slot of ['wa1', 'wa2']) {

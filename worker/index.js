@@ -680,6 +680,31 @@ async function jaProcessou(c, targetJid, text) {
   }
 }
 
+// Alvos com falha PERMANENTE (ex.: número saiu do grupo): após 3 forbiddens
+// seguidos o worker pula o alvo por 24h em vez de tentar a cada oferta.
+// key = slot|targetJid -> { fails, lastAt }
+const brokenTargets = new Map();
+const BROKEN_AFTER = 3;
+const BROKEN_SKIP_MS = 24 * 3600 * 1000;
+
+function erroPermanente(e) {
+  return /forbidden|not-?authorized|unauthorized|not-?in-?group|not-?participant|[^0-9]403[^0-9]/.test(String(e || '').toLowerCase());
+}
+function alvoQuebrado(slot, t) {
+  const b = brokenTargets.get(`${slot}|${t}`);
+  return !!b && b.fails >= BROKEN_AFTER && Date.now() - b.lastAt < BROKEN_SKIP_MS;
+}
+function marcarFalha(slot, t, permanente) {
+  const k = `${slot}|${t}`;
+  if (!permanente) { brokenTargets.delete(k); return 0; }
+  const b = brokenTargets.get(k) || { fails: 0, lastAt: 0 };
+  b.fails += 1;
+  b.lastAt = Date.now();
+  brokenTargets.set(k, b);
+  if (brokenTargets.size > 5000) brokenTargets.clear();
+  return b.fails;
+}
+
 // Sem fila: se não couber na janela, perde-se (decisão do usuário).
 // A trava anti-duplicata (reserva + marca) continua valendo.
 // Retorna { ok, sent: [{jid, id, participant}] } para o mapa de repasses.
@@ -694,20 +719,34 @@ async function enviarLote(c, targets, text, mediaBuf, mediaType, slot, pularInte
     log.info({ kind: c.kind }, 'nada novo para enviar (anti-duplicata)');
     return { ok: false, sent: [] };
   }
-  let ok = 0;
+  let ok = 0, permFails = 0, pulados = 0;
   const sent = [];
+  const sl = normSlot(slot);
   for (const t of reservados) {
+    if (alvoQuebrado(sl, t)) { pulados++; continue; }
     try {
       const key = await sendComMidia(t, text, mediaBuf, mediaType, slot);
+      brokenTargets.delete(`${sl}|${t}`);
       await pool.query('UPDATE "QueuedOffer" SET status = $1, "sentAt" = NOW() WHERE "userId" = $2 AND kind = $3 AND fp = $4 AND "targetJid" = $5', ['sent', c.userId, c.kind || 'copiador', ofertaFp(c, text), t]).catch(() => {});
       await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind, "ruleId") VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)', [c.userId, t, text, 'sent', c.kind || 'copiador', c.ruleId || null]).catch(() => {});
       if (key && key.id) sent.push({ jid: t, id: key.id, participant: key.participant || null });
       ok++;
     } catch (e) {
-      log.warn({ e: String(e).slice(0, 200), to: t }, 'envio falhou');
+      const msg = String(e).slice(0, 200);
+      const perm = erroPermanente(e);
+      const fails = marcarFalha(sl, t, perm);
+      await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind, "ruleId", error) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)', [c.userId, t, text, 'failed', c.kind || 'copiador', c.ruleId || null, msg]).catch(() => {});
+      log.warn({ e: msg, to: t, slot: sl, kind: c.kind || 'copiador', fails }, 'envio falhou');
+      if (perm) permFails++;
     }
   }
-  if (ok) marcarEnvio(c);
+  if (pulados) log.info({ kind: c.kind, slot: sl, pulados }, 'alvos ignorados (falha permanente): confira se o número está nos grupos');
+  if (ok) {
+    marcarEnvio(c);
+    log.info({ kind: c.kind, slot: sl, ok, total: reservados.length }, 'lote enviado');
+  } else if (permFails === reservados.length && reservados.length) {
+    log.warn({ kind: c.kind, slot: sl, n: reservados.length }, 'regra 100% bloqueada: número fora dos grupos? confira a regra');
+  }
   return { ok: ok > 0, sent };
 }
 
