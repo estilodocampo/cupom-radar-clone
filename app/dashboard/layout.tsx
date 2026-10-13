@@ -7,25 +7,26 @@ interface Item { href: string; label: string; badge?: string }
 interface Group { label: string; icon: string; items: Item[] }
 
 const TOP: Item[] = [
-  { href: '/dashboard', label: '🏠 Dashboard' },
-  { href: '/dashboard/robo', label: '🤖 Config Robô' },
+  { href: '/dashboard', label: '🏠 Início' },
+  { href: '/dashboard/robo', label: '🤖 Robô' },
   { href: '/dashboard/planos', label: '💎 Planos' },
+  { href: '/dashboard/relatorios', label: '📊 Relatórios' },
 ];
 
 const GROUPS: Group[] = [
-  { label: 'Postagens', icon: '✉️', items: [
-    { href: '/dashboard/postagens/produtos', label: '📦 Produtos' },
-    { href: '/dashboard/postagens/copiador', label: '📑 Modo Copiador' },
+  { label: 'Automação', icon: '✉️', items: [
+    { href: '/dashboard/postagens/produtos', label: '✏️ Criar oferta' },
+    { href: '/dashboard/postagens/copiador', label: '📑 Copiador' },
     { href: '/dashboard/postagens/distribuidor', label: '🔀 Distribuidor' },
-    { href: '/dashboard/postagens/envio', label: '🚀 Envio automático' },
-    { href: '/dashboard/postagens/fila', label: '📋 Modo Fila' },
-    { href: '/dashboard/postagens/sorteio', label: '🎉 Sorteio + Boas-vindas' },
+    { href: '/dashboard/postagens/envio', label: '🚀 Envio' },
+    { href: '/dashboard/postagens/fila', label: '📋 Fila' },
+    { href: '/dashboard/postagens/sorteio', label: '🎉 Sorteio' },
   ]},
-  { label: 'Configurações', icon: '⚙️', items: [
-    { href: '/dashboard/config/ajuda', label: '❓ Central de Ajuda' },
-    { href: '/dashboard/config/dados', label: '👤 Seus Dados' },
-    { href: '/dashboard/config/feedback', label: '💭 Enviar Feedback' },
-  ]},
+];
+
+const ACCOUNT: Item[] = [
+  { href: '/dashboard/config/ajuda', label: '❓ Ajuda' },
+  { href: '/dashboard/config/dados', label: '👤 Seus Dados' },
 ];
 
 // Rótulo amigável da tela atual (breadcrumb do topo)
@@ -37,7 +38,7 @@ const LABELS: [string, string][] = [
   ['/dashboard/postagens/envio', 'Envio automático'],
   ['/dashboard/postagens/fila', 'Modo Fila'],
   ['/dashboard/postagens', 'Postagens'],
-  ['/dashboard/robo', 'Config Robô'],
+  ['/dashboard/robo', 'Robô'],
   ['/dashboard/planos', 'Planos'],
   ['/dashboard/relatorios', 'Relatórios'],
   ['/dashboard/config/dados', 'Seus Dados'],
@@ -83,8 +84,7 @@ function initials(name?: string | null, email?: string | null) {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const path = usePathname();
-  const [open, setOpen] = useState<Record<string, boolean>>({ Postagens: true, Configurações: true });
-  const [light, setLight] = useState(false);
+  const [open, setOpen] = useState<Record<string, boolean>>({ Automação: true });
   const [mobOpen, setMobOpen] = useState(false);
   const name = session?.user?.name || session?.user?.email?.split('@')[0] || 'Usuário';
   const first = name.split(' ')[0];
@@ -113,40 +113,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => document.body.classList.remove('mob-open');
   }, [mobOpen]);
 
-  const [pwaPrompt, setPwaPrompt] = useState<{ prompt: () => void } | null>(null);
-
-  React.useEffect(() => {
-    const onBeforeInstall = (e: Event) => {
-      e.preventDefault();
-      setPwaPrompt(e as unknown as { prompt: () => void });
-    };
-    window.addEventListener('beforeinstallprompt', onBeforeInstall);
-    return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall);
-  }, []);
-
-  async function installApp(e: React.MouseEvent) {
-    e.preventDefault();
-    if (pwaPrompt) {
-      pwaPrompt.prompt();
-      setPwaPrompt(null);
-    } else {
-      alert('Para instalar: no Android, menu ⋮ → "Instalar app". No iPhone, Compartilhar → "Adicionar à Tela de Início".');
-    }
-  }
-
-  function toggleTheme() {
-    const next = !light;
-    setLight(next);
-    document.body.classList.toggle('light', next);
-    try { localStorage.setItem('cr_theme', next ? 'light' : 'dark'); } catch { /* ignore */ }
-  }
-
-  React.useEffect(() => {
-    try {
-      if (localStorage.getItem('cr_theme') === 'light') { setLight(true); document.body.classList.add('light'); }
-    } catch { /* ignore */ }
-  }, []);
-
   return (
     <div className="shell">
       {mobOpen && <button className="mob-backdrop" aria-label="Fechar menu" onClick={() => setMobOpen(false)} />}
@@ -159,7 +125,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
         <nav>
           {TOP.map((n) => <a key={n.href} className={`nav-item${active(n.href) ? ' active' : ''}`} href={n.href}>{n.label}{n.href === '/dashboard/robo' && waOn && <span className="op-pulse" style={{ marginLeft: 'auto' }} />}</a>)}
-          <a className={`nav-item${path.startsWith('/dashboard/relatorios') ? ' active' : ''}`} href="/dashboard/relatorios">📊 Relatórios</a>
           {GROUPS.map((g) => (
             <div key={g.label}>
               <button className="nav-item" style={{ width: '100%', background: 'none', border: 0, cursor: 'pointer' }} onClick={() => setOpen({ ...open, [g.label]: !open[g.label] })}>
@@ -172,11 +137,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               ))}
             </div>
           ))}
+          {ACCOUNT.map((n) => <a key={n.href} className={`nav-item${active(n.href) ? ' active' : ''}`} href={n.href}>{n.label}</a>)}
         </nav>
         <div style={{ marginTop: 'auto', paddingTop: 12, display: 'grid', gap: 8 }}>
           <a className="btn btn-primary btn-sm" style={{ textAlign: 'center' }} href="https://wa.me/5548996911387" target="_blank" rel="noreferrer">💬 Falar com Suporte</a>
-          <a className="nav-item" href="#" onClick={installApp}>📲 Baixar App</a>
-          <button className="nav-item" style={{ width: '100%', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left' }} onClick={toggleTheme}>{light ? '🌙 Modo escuro' : '☀️ Modo claro'}</button>
           {session?.user ? (
             <button className="nav-item" style={{ width: '100%', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left' }} onClick={() => signOut({ callbackUrl: '/' })}>🚪 Sair</button>
           ) : (
