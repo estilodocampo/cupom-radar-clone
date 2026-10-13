@@ -102,9 +102,9 @@ export default function Sorteio() {
   return (
     <>
       <a className="back" href="/dashboard/postagens">← Postagens</a>
-      <div className="eyebrow">● CRESCIMENTO</div>
+      <div className="eyebrow">● SORTEIO</div>
       <h1 className="h1">Sorteio + Boas-vindas</h1>
-      <p className="sub">Ferramentas para crescer o grupo. <span className="badge badge-ok">NOVO</span></p>
+      <p className="sub">Sorteie membros e ative boas-vindas automáticas.</p>
       {msg && <p>{msg}</p>}
 
       <div className="card" style={{ maxWidth: 720 }}>

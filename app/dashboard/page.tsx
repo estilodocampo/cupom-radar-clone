@@ -5,9 +5,9 @@ import { useSession } from 'next-auth/react';
 type Stats = { plan?: string; postsToday?: number; scheduledPending?: number; sentTotal?: number; clicks?: number };
 
 const QUICK = [
-  { href: '/dashboard/postagens/produtos', icon: '📝', tone: 'green', name: 'Gerar Postagem', desc: 'Crie postagens prontas para compartilhar nas suas redes sociais.' },
-  { href: '/dashboard/postagens/copiador', icon: '📑', tone: 'blue', name: 'Modo Copiador', desc: 'Replique ofertas do grupo de origem com o seu link de afiliado.' },
-  { href: '/dashboard/postagens/distribuidor', icon: '🔀', tone: 'amber', name: 'Distribuidor', desc: 'Repasse o que você posta no seu grupo para os demais.' },
+  { href: '/dashboard/postagens/produtos', icon: '📝', tone: 'green', name: 'Gerar Postagem', desc: 'Crie postagens prontas para compartilhar.' },
+  { href: '/dashboard/postagens/copiador', icon: '📑', tone: 'blue', name: 'Modo Copiador', desc: 'Replique ofertas do grupo de origem com o seu link.' },
+  { href: '/dashboard/postagens/distribuidor', icon: '🔀', tone: 'amber', name: 'Distribuidor', desc: 'Repasse o que posta no seu grupo para os demais.' },
   { href: '/dashboard/postagens/sorteio', icon: '🎉', tone: 'purple', name: 'Sorteio + Boas-vindas', desc: 'Sorteie membros e receba novatos automaticamente.' },
 ];
 
@@ -35,22 +35,7 @@ export default function Overview() {
       </div>
 
       <div className="dash-section">
-        <div className="dash-eyebrow">FERRAMENTAS</div>
-        <h2 className="dash-h2">Acesso rápido</h2>
-      </div>
-      <div className="quick">
-        {QUICK.map((q) => (
-          <a className="quick-card" key={q.href} href={q.href}>
-            <span className={`quick-ico tone-${q.tone}`}>{q.icon}</span>
-            <span className="quick-arrow">↗</span>
-            <h3>{q.name}</h3>
-            <p>{q.desc}</p>
-          </a>
-        ))}
-      </div>
-
-      <div className="dash-section">
-        <div className="dash-eyebrow">DESEMPENHO</div>
+        <div className="dash-eyebrow">DESTAQUES</div>
         <h2 className="dash-h2">Sua operação</h2>
       </div>
       <div className="grid grid-4">
@@ -61,7 +46,7 @@ export default function Overview() {
       </div>
 
       <div className="dash-section">
-        <div className="dash-eyebrow">MAIS</div>
+        <div className="dash-eyebrow">MÁIS</div>
         <h2 className="dash-h2">Continue configurando</h2>
       </div>
       <div className="grid grid-3">

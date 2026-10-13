@@ -6,7 +6,6 @@ import './globals.css';
 export const metadata = {
   title: 'Cupom Radar — Automação de Afiliados',
   description: 'Gere ofertas, conecte o WhatsApp e venda no piloto automático',
-  themeColor: '#0a0f1e',
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Cupom Radar' },
 };
 
