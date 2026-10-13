@@ -89,10 +89,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const name = session?.user?.name || session?.user?.email?.split('@')[0] || 'Usuário';
   const first = name.split(' ')[0];
   const [plan, setPlan] = useState('');
+  const [waOn, setWaOn] = useState(false);
   const active = (href: string) => (href === '/dashboard' ? path === href : path.startsWith(href));
 
   React.useEffect(() => {
     fetch('/api/stats').then((r) => r.json()).then((d) => setPlan(d?.plan || '')).catch(() => {});
+    fetch('/api/whatsapp/status').then((r) => r.json()).then((d) => {
+      const s = d?.slots || {};
+      setWaOn(Object.values(s).some((v) => (v as { connected?: boolean })?.connected));
+    }).catch(() => {});
   }, []);
 
   React.useEffect(() => { setMobOpen(false); }, [path]);
@@ -147,13 +152,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {mobOpen && <button className="mob-backdrop" aria-label="Fechar menu" onClick={() => setMobOpen(false)} />}
 
       <aside className="sidebar" aria-label="Menu principal">
-        <div className="brand"><span className="brand-badge">📡</span> Cupom Radar</div>
+        <div className="brand"><span className="brand-badge">📡</span> Cupom Radar{waOn && <span className="op-live"><span className="op-pulse" />AO VIVO</span>}</div>
         <div className="side-user">
           <div className="avatar">{initials(session?.user?.name, session?.user?.email)}</div>
           <div><small>USUÁRIO</small><b>{name}</b></div>
         </div>
         <nav>
-          {TOP.map((n) => <a key={n.href} className={`nav-item${active(n.href) ? ' active' : ''}`} href={n.href}>{n.label}</a>)}
+          {TOP.map((n) => <a key={n.href} className={`nav-item${active(n.href) ? ' active' : ''}`} href={n.href}>{n.label}{n.href === '/dashboard/robo' && waOn && <span className="op-pulse" style={{ marginLeft: 'auto' }} />}</a>)}
           <a className={`nav-item${path.startsWith('/dashboard/relatorios') ? ' active' : ''}`} href="/dashboard/relatorios">📊 Relatórios</a>
           {GROUPS.map((g) => (
             <div key={g.label}>
