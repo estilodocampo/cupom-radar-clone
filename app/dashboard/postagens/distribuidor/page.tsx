@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { SlotPicker } from '../SlotPicker';
 import Empty from '../../Empty';
 
-type Group = { id: string; name: string };
+type Group = { id: string; name: string; canSend?: boolean };
 type Rule = {
   id: string; name: string; slot: string; hub: string; targets: string[];
   onlyMine: boolean; requireLink: boolean; convert: boolean; stripCoupons: boolean;
@@ -102,6 +102,15 @@ export default function Distribuidor() {
 
   function gname(id: string) {
     return groups.find((g) => g.id === id)?.name || `${id.slice(0, 14)}…`;
+  }
+
+  // Alvos da regra onde o número não pode enviar (grupo só-admins)
+  function semPermissao(targets: string[]) {
+    if (!groups.length) return [];
+    return (targets || []).filter((t) => {
+      const g = groups.find((x) => x.id === t);
+      return !!g && g.canSend === false;
+    });
   }
 
   async function save(pausadoOver?: boolean) {
@@ -219,6 +228,7 @@ export default function Distribuidor() {
         {mine.map((r) => (
           <div className="card" key={r.id} style={{ marginBottom: 8 }}>
             <b>{r.name || 'Distribuição'}</b> {r.pausado ? <span className="badge badge-err">PAUSADO</span> : <span className="badge badge-ok">ATIVO</span>}
+            {semPermissao(r.targets).length > 0 && <span className="badge badge-warn">⚠️ {semPermissao(r.targets).length} sem permissão</span>}
             <p className="hint">{gname(r.hub)} → {r.targets.length}{r.minInterval ? ` · 1/${r.minInterval}min` : ''}{r.maxPerDay ? ` · máx ${r.maxPerDay}/dia` : ''}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-ghost btn-sm" onClick={() => edit(r)}>Editar</button>

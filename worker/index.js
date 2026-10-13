@@ -686,6 +686,7 @@ async function jaProcessou(c, targetJid, text) {
 const brokenTargets = new Map();
 const BROKEN_AFTER = 3;
 const BROKEN_SKIP_MS = 24 * 3600 * 1000;
+const skipLogAt = new Map(); // kind|slot -> timestamp do último alerta de pulo
 
 function erroPermanente(e) {
   return /forbidden|not-?authorized|unauthorized|not-?in-?group|not-?participant|[^0-9]403[^0-9]/.test(String(e || '').toLowerCase());
@@ -703,6 +704,29 @@ function marcarFalha(slot, t, permanente) {
   brokenTargets.set(k, b);
   if (brokenTargets.size > 5000) brokenTargets.clear();
   return b.fails;
+}
+
+// Restaura os alvos quebrados a partir das falhas recentes no banco,
+// para não tentar de novo após cada restart/deploy.
+async function carregarAlvosQuebrados() {
+  if (!pool) return;
+  try {
+    const { rows } = await pool.query(
+      `SELECT "groupJid", SUBSTRING(error FROM '^\\[([^\\]]+)\\]') AS slot, COUNT(*) AS n
+       FROM "DispatchLog" WHERE status = 'failed' AND "sentAt" > NOW() - INTERVAL '24 hours'
+       AND error ILIKE '%forbidden%' GROUP BY 1, 2`
+    );
+    let marcados = 0;
+    for (const r of rows) {
+      if (r.slot && r.groupJid && Number(r.n) >= BROKEN_AFTER) {
+        brokenTargets.set(`${r.slot}|${r.groupJid}`, { fails: Number(r.n), lastAt: Date.now() });
+        marcados++;
+      }
+    }
+    if (marcados) log.info({ marcados }, 'alvos quebrados restaurados do banco');
+  } catch (e) {
+    log.warn({ e: String(e).slice(0, 120) }, 'restauração de alvos quebrados falhou');
+  }
 }
 
 // Sem fila: se não couber na janela, perde-se (decisão do usuário).
@@ -735,12 +759,22 @@ async function enviarLote(c, targets, text, mediaBuf, mediaType, slot, pularInte
       const msg = String(e).slice(0, 200);
       const perm = erroPermanente(e);
       const fails = marcarFalha(sl, t, perm);
-      await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind, "ruleId", error) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)', [c.userId, t, text, 'failed', c.kind || 'copiador', c.ruleId || null, msg]).catch(() => {});
+      // Prefixo [slot]: permite restaurar os alvos quebrados do banco após restart
+      const errDb = `[${sl}] ${msg}`.slice(0, 220);
+      await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind, "ruleId", error) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)', [c.userId, t, text, 'failed', c.kind || 'copiador', c.ruleId || null, errDb]).catch(() => {});
       log.warn({ e: msg, to: t, slot: sl, kind: c.kind || 'copiador', fails }, 'envio falhou');
       if (perm) permFails++;
     }
   }
-  if (pulados) log.info({ kind: c.kind, slot: sl, pulados }, 'alvos ignorados (falha permanente): confira se o número está nos grupos');
+  if (pulados) {
+    // Alerta no máximo 1x a cada 6h por regra: informa sem spammar o log
+    const k = `${c.kind || 'copiador'}|${sl}`;
+    const last = skipLogAt.get(k) || 0;
+    if (Date.now() - last > 6 * 3600 * 1000) {
+      skipLogAt.set(k, Date.now());
+      log.info({ kind: c.kind, slot: sl, pulados }, 'alvos ignorados (falha permanente): confira se o número está nos grupos');
+    }
+  }
   if (ok) {
     marcarEnvio(c);
     log.info({ kind: c.kind, slot: sl, ok, total: reservados.length }, 'lote enviado');
@@ -1168,6 +1202,7 @@ server.listen(PORT, () => log.info({ PORT }, 'worker http no ar'));
 connectSlot('wa1').catch((e) => log.error(String(e)));
 connectSlot('wa2').catch((e) => log.error(String(e)));
 loadCopiadores().catch(() => {});
+carregarAlvosQuebrados().catch(() => {});
 setInterval(tick, 15000);
 setInterval(loadCopiadores, 60000);
 // Limpa mapas de repasse com mais de 7 dias (fora da janela de apagar do WhatsApp)

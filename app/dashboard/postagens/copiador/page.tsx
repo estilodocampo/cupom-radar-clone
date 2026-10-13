@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { SlotPicker } from '../SlotPicker';
 import Empty from '../../Empty';
 
-type Group = { id: string; name: string };
+type Group = { id: string; name: string; canSend?: boolean };
 type Rule = { id: string; name: string; slot: string; source: string; hub: string; keepCoupons: boolean; active: boolean };
 
 export default function Copiador() {
@@ -117,6 +117,7 @@ export default function Copiador() {
         {mine.map((r) => (
           <div className="card" key={r.id} style={{ marginBottom: 8 }}>
             <b>{r.name || 'Cópia'}</b> {r.active ? <span className="badge badge-ok">ativa</span> : <span className="badge">pausada</span>}
+            {groups.length > 0 && !groups.some((g) => g.id === r.hub && g.canSend !== false) && <span className="badge badge-warn">⚠️ hub sem permissão</span>}
             <p className="hint">{r.source.slice(0, 18)}… → {gname(r.hub)}{r.keepCoupons ? ' · +cupons' : ''}</p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => edit(r)}>Editar</button>
