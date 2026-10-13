@@ -29,24 +29,24 @@
   .rp-shell { display: flex; min-height: 640px; }
 
   /* ---- Sidebar ---- */
-  .rp-side { width: 252px; flex-shrink: 0; background: #0D1120; border-right: 1px solid var(--line); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; }
-  .rp-logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; padding: 2px 6px 14px; }
-  .rp-mark { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, #B8F135, #34D399); display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 6px 20px rgba(184,241,53,.35); }
-  .rp-user { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; }
+  .rp-side { width: 236px; flex-shrink: 0; background: #0D1120; border-right: 1px solid var(--line); padding: 14px 12px; display: flex; flex-direction: column; gap: 2px; }
+  .rp-logo { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 16px; padding: 2px 6px 10px; }
+  .rp-mark { width: 34px; height: 34px; border-radius: 11px; background: linear-gradient(135deg, #B8F135, #34D399); display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 6px 20px rgba(184,241,53,.35); }
+  .rp-user { display: flex; align-items: center; gap: 9px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; }
   .rp-ava { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #A78BFA, #6366F1); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
   .rp-user small { display: block; font-size: 9px; letter-spacing: 1.5px; color: var(--dim); }
   .rp-user b { font-size: 13.5px; }
-  .rp-sec { font-size: 10px; letter-spacing: 2px; color: var(--dim); font-weight: 800; padding: 12px 10px 5px; }
-  .rp-nav { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; color: var(--mut); font-weight: 600; font-size: 13.5px; }
+  .rp-sec { font-size: 10px; letter-spacing: 2px; color: var(--dim); font-weight: 800; padding: 9px 10px 4px; }
+  .rp-nav { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 11px; color: var(--mut); font-weight: 600; font-size: 13px; }
   .rp-nav:hover { background: rgba(255,255,255,.05); color: var(--txt); }
   .rp-nav.on { background: var(--lime); color: var(--limedk); font-weight: 800; box-shadow: 0 6px 18px rgba(184,241,53,.3); }
-  .rp-ico { width: 30px; height: 30px; border-radius: 9px; background: rgba(255,255,255,.07); display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .rp-ico { width: 28px; height: 28px; border-radius: 8px; background: rgba(255,255,255,.07); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
   .rp-nav.on .rp-ico { background: rgba(0,0,0,.15); }
   .rp-sub { padding-left: 50px; }
   .rp-count { margin-left: auto; background: var(--violet); color: #0C1206; font-size: 10px; font-weight: 800; border-radius: 999px; padding: 2px 8px; }
-  .rp-sup { margin-top: auto; background: linear-gradient(135deg, rgba(184,241,53,.16), rgba(52,211,153,.12)); border: 1px solid rgba(184,241,53,.3); border-radius: 16px; padding: 14px; }
-  .rp-sup b { font-size: 13.5px; display: block; margin-bottom: 3px; }
-  .rp-sup p { font-size: 12px; color: var(--mut); margin-bottom: 10px; }
+  .rp-sup { margin-top: auto; background: linear-gradient(135deg, rgba(184,241,53,.16), rgba(52,211,153,.12)); border: 1px solid rgba(184,241,53,.3); border-radius: 14px; padding: 11px; }
+  .rp-sup b { font-size: 13px; display: block; margin-bottom: 2px; }
+  .rp-sup p { font-size: 11.5px; color: var(--mut); margin-bottom: 8px; }
   .rp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer; font-weight: 800; border-radius: 12px; padding: 10px 18px; font-size: 13.5px; }
   .rp-btn.lime { background: var(--lime); color: var(--limedk); width: 100%; }
   .rp-btn.lime:hover { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 8px 22px rgba(184,241,53,.35); }
@@ -62,29 +62,29 @@
   .rp-crumb { font-size: 11.5px; color: var(--dim); margin-top: 1px; }
   .rp-crumb i { font-style: normal; color: var(--lime); }
   .rp-plan { margin-left: auto; display: flex; align-items: center; gap: 8px; background: rgba(167,139,250,.12); border: 1px solid rgba(167,139,250,.4); color: #C4B5FD; font-weight: 800; font-size: 12.5px; border-radius: 999px; padding: 7px 15px; text-transform: capitalize; }
-  .rp-body { padding: 26px 26px 40px; max-width: 1020px; }
-  .rp-hero h2 { font-size: 30px; letter-spacing: -0.8px; line-height: 1.15; }
+  .rp-body { padding: 20px 22px 32px; max-width: 1020px; }
+  .rp-hero h2 { font-size: 26px; letter-spacing: -0.8px; line-height: 1.15; }
   .rp-hero h2 em { font-style: normal; background: linear-gradient(90deg, #B8F135, #34D399); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .rp-hero p { color: var(--mut); margin-top: 6px; font-size: 14.5px; }
-  .rp-eyebrow { color: var(--lime); font-size: 11px; font-weight: 800; letter-spacing: 2.5px; margin: 28px 0 4px; }
-  .rp-h3 { font-size: 20px; letter-spacing: -0.4px; margin-bottom: 14px; }
-  .rp-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-  .rp-stat { background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 18px; padding: 16px; position: relative; overflow: hidden; }
+  .rp-eyebrow { color: var(--lime); font-size: 10.5px; font-weight: 800; letter-spacing: 2.5px; margin: 20px 0 3px; }
+  .rp-h3 { font-size: 18px; letter-spacing: -0.4px; margin-bottom: 10px; }
+  .rp-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .rp-stat { background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 15px; padding: 12px; position: relative; overflow: hidden; }
   .rp-stat::after { content: ''; position: absolute; top: 0; left: 16px; right: 16px; height: 3px; border-radius: 99px; background: var(--ac, var(--lime)); opacity: .9; }
   .rp-stat small { color: var(--mut); font-size: 10.5px; font-weight: 800; letter-spacing: 1.2px; }
-  .rp-num { font-size: 30px; font-weight: 800; letter-spacing: -1px; margin: 4px 0 8px; text-transform: capitalize; }
+  .rp-num { font-size: 24px; font-weight: 800; letter-spacing: -1px; margin: 3px 0 7px; text-transform: capitalize; }
   .rp-delta { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 3px 10px; }
   .rp-delta.up { background: rgba(52,211,153,.14); color: var(--ok); }
   .rp-delta.info { background: rgba(167,139,250,.14); color: #C4B5FD; }
-  .rp-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .rp-act { display: block; background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 18px; padding: 18px; position: relative; transition: transform .12s, border-color .15s; }
+  .rp-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .rp-act { display: block; background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 15px; padding: 14px; position: relative; transition: transform .12s, border-color .15s; }
   .rp-act:hover { transform: translateY(-3px); border-color: rgba(184,241,53,.5); }
-  .rp-tile { width: 44px; height: 44px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
-  .rp-act h4 { margin: 12px 0 4px; font-size: 15.5px; }
-  .rp-act p { color: var(--mut); font-size: 12.5px; line-height: 1.5; }
-  .rp-go { position: absolute; top: 16px; right: 18px; color: var(--dim); }
+  .rp-tile { width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 19px; }
+  .rp-act h4 { margin: 9px 0 3px; font-size: 14px; }
+  .rp-act p { font-size: 12px; }
+  .rp-go { position: absolute; top: 12px; right: 14px; color: var(--dim); }
   .rp-act:hover .rp-go { color: var(--lime); }
-  .rp-strip { display: flex; gap: 10px; margin-top: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; align-items: center; }
+  .rp-strip { display: flex; gap: 9px; margin-top: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 13px; padding: 11px 13px; align-items: center; }
   .rp-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); flex-shrink: 0; animation: pulse 2s infinite; }
   @keyframes pulse { 50% { opacity: .5; } }
   .rp-strip p { font-size: 13px; color: var(--mut); }
@@ -96,15 +96,27 @@
   .frame.mobile .rp-burg { display: flex; align-items: center; justify-content: center; }
   .frame.mobile .rp-grid4 { grid-template-columns: 1fr 1fr; }
   .frame.mobile .rp-grid3 { grid-template-columns: 1fr; }
-  .frame.mobile .rp-body { padding: 18px 14px 120px; }
-  .frame.mobile .rp-hero h2 { font-size: 24px; }
-  .frame.mobile .rp-top { padding: 10px 14px; }
+  .frame.mobile .rp-body { padding: 14px 12px 110px; }
+  .frame.mobile .rp-hero h2 { font-size: 21px; }
+  .frame.mobile .rp-hero p { font-size: 13px; }
+  .frame.mobile .rp-num { font-size: 21px; }
+  .frame.mobile .rp-top { padding: 10px 12px; }
   .frame.mobile .rp-plan { font-size: 11px; padding: 5px 11px; }
   .frame.mobile .rp-tabbar { display: flex; position: sticky; bottom: 0; background: rgba(13,17,32,.97); border-top: 1px solid var(--line); padding: 8px 4px calc(8px + env(safe-area-inset-bottom)); z-index: 5; }
   .frame.mobile .rp-tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--dim); font-size: 10.5px; font-weight: 800; padding: 6px 0; border-radius: 12px; }
   .frame.mobile .rp-tab span:first-child { font-size: 20px; }
   .frame.mobile .rp-tab.on { color: var(--lime); }
   .frame.mobile .rp-fab { display: flex; position: sticky; bottom: 84px; margin-left: auto; margin-right: 12px; width: 52px; height: 52px; border-radius: 50%; background: var(--lime); color: var(--limedk); font-size: 24px; align-items: center; justify-content: center; box-shadow: 0 10px 26px rgba(184,241,53,.4); z-index: 6; }
+  /* modo "só layout": esconde o cabeçalho do protótipo */
+  body.clean .proto-head, body.clean .view-switch, body.clean .proto-toggle { display: none; }
+  body.clean { padding: 0; }
+  body.clean .frame { border-radius: 0; border: 0; box-shadow: none; }
+  .proto-toggle { position: fixed; bottom: 14px; left: 14px; z-index: 50; border: 1px solid rgba(255,255,255,.15); background: #10141f; color: #B8F135; font-weight: 800; font-size: 12px; border-radius: 999px; padding: 9px 16px; cursor: pointer; }
+  @media (max-width: 560px) {
+    .proto-head h1 { font-size: 20px; }
+    .proto-head p { font-size: 12.5px; }
+    .view-switch button { padding: 8px 14px; font-size: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -209,13 +221,24 @@
 <script>
   function setView(v, btn) {
     document.querySelectorAll('.view-switch button').forEach(b => b.classList.remove('on'));
-    btn.classList.add('on');
+    if (btn) btn.classList.add('on');
     const f = document.getElementById('frame');
     f.classList.remove('mobile');
     if (v === 'mobile') { f.classList.add('mobile'); f.style.width = '390px'; }
     else if (v === 'tab') { f.style.width = '768px'; }
     else { f.style.width = '1200px'; }
   }
+  function toggleClean() {
+    document.body.classList.toggle('clean');
+    document.querySelector('.proto-toggle').textContent =
+      document.body.classList.contains('clean') ? '◉ Mostrar opções' : '◉ Só layout';
+  }
+  // No celular abre direto na visão mobile, sem a bagunça do cabeçalho
+  if (window.innerWidth < 560) {
+    document.body.classList.add('clean');
+    setView('mobile', document.querySelectorAll('.view-switch button')[2]);
+  }
 </script>
+<button class="proto-toggle" onclick="toggleClean()">◉ Só layout</button>
 </body>
 </html>
