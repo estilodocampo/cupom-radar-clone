@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cupom Radar — Protótipo Novo Layout "Radar Pulse"</title>
+<style>
+  /* ============ PROTÓTIPO (moldura) ============ */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #05070d; color: #eef2ff; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 28px 16px 60px; }
+  .proto-head { text-align: center; max-width: 720px; margin-bottom: 18px; }
+  .proto-head h1 { font-size: 26px; letter-spacing: -0.5px; }
+  .proto-head h1 span { color: #B8F135; }
+  .proto-head p { color: #8B96B3; font-size: 14px; margin-top: 6px; }
+  .view-switch { display: flex; gap: 8px; margin: 16px 0 22px; background: #10141f; border: 1px solid rgba(255,255,255,.09); padding: 6px; border-radius: 999px; }
+  .view-switch button { border: 0; cursor: pointer; background: transparent; color: #8B96B3; font-weight: 700; font-size: 13px; padding: 9px 22px; border-radius: 999px; }
+  .view-switch button.on { background: #B8F135; color: #0C1206; }
+  .frame { border: 1px solid rgba(255,255,255,.1); border-radius: 22px; overflow: hidden; width: 1200px; max-width: 100%; transition: width .25s ease; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  .frame.mobile { width: 390px; }
+
+  /* ============ NOVO LAYOUT "RADAR PULSE" ============ */
+  .rp { --bg:#0B0E17; --panel:#121828; --panel2:#171E33; --line:rgba(255,255,255,.08);
+        --txt:#F2F5FB; --mut:#8B96B3; --dim:#5B6580;
+        --lime:#B8F135; --limedk:#0C1206; --violet:#A78BFA;
+        --ok:#34D399; --warn:#FBBF24; --bad:#FB7185;
+        background: radial-gradient(900px 420px at 85% -10%, rgba(184,241,53,.07), transparent 60%), var(--bg);
+        color: var(--txt); min-height: 640px; font-size: 14px; }
+  .rp a { text-decoration: none; color: inherit; }
+  .rp-shell { display: flex; min-height: 640px; }
+
+  /* ---- Sidebar ---- */
+  .rp-side { width: 252px; flex-shrink: 0; background: #0D1120; border-right: 1px solid var(--line); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .rp-logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; padding: 2px 6px 14px; }
+  .rp-mark { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, #B8F135, #34D399); display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 6px 20px rgba(184,241,53,.35); }
+  .rp-user { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; }
+  .rp-ava { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #A78BFA, #6366F1); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
+  .rp-user small { display: block; font-size: 9px; letter-spacing: 1.5px; color: var(--dim); }
+  .rp-user b { font-size: 13.5px; }
+  .rp-sec { font-size: 10px; letter-spacing: 2px; color: var(--dim); font-weight: 800; padding: 12px 10px 5px; }
+  .rp-nav { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; color: var(--mut); font-weight: 600; font-size: 13.5px; }
+  .rp-nav:hover { background: rgba(255,255,255,.05); color: var(--txt); }
+  .rp-nav.on { background: var(--lime); color: var(--limedk); font-weight: 800; box-shadow: 0 6px 18px rgba(184,241,53,.3); }
+  .rp-ico { width: 30px; height: 30px; border-radius: 9px; background: rgba(255,255,255,.07); display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .rp-nav.on .rp-ico { background: rgba(0,0,0,.15); }
+  .rp-sub { padding-left: 50px; }
+  .rp-count { margin-left: auto; background: var(--violet); color: #0C1206; font-size: 10px; font-weight: 800; border-radius: 999px; padding: 2px 8px; }
+  .rp-sup { margin-top: auto; background: linear-gradient(135deg, rgba(184,241,53,.16), rgba(52,211,153,.12)); border: 1px solid rgba(184,241,53,.3); border-radius: 16px; padding: 14px; }
+  .rp-sup b { font-size: 13.5px; display: block; margin-bottom: 3px; }
+  .rp-sup p { font-size: 12px; color: var(--mut); margin-bottom: 10px; }
+  .rp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer; font-weight: 800; border-radius: 12px; padding: 10px 18px; font-size: 13.5px; }
+  .rp-btn.lime { background: var(--lime); color: var(--limedk); width: 100%; }
+  .rp-btn.lime:hover { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 8px 22px rgba(184,241,53,.35); }
+  .rp-btn.ghost { background: transparent; color: var(--mut); border: 1px solid var(--line); }
+  .rp-btn.sm { padding: 7px 14px; font-size: 12.5px; border-radius: 10px; }
+
+  /* ---- Main ---- */
+  .rp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .rp-top { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: rgba(11,14,23,.85); backdrop-filter: blur(8px); position: sticky; top: 0; }
+  .rp-burg { display: none; width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--txt); font-size: 18px; cursor: pointer; }
+  .rp-hello small { color: var(--mut); font-size: 12px; display: block; }
+  .rp-hello b { font-size: 17px; letter-spacing: -0.3px; }
+  .rp-crumb { font-size: 11.5px; color: var(--dim); margin-top: 1px; }
+  .rp-crumb i { font-style: normal; color: var(--lime); }
+  .rp-plan { margin-left: auto; display: flex; align-items: center; gap: 8px; background: rgba(167,139,250,.12); border: 1px solid rgba(167,139,250,.4); color: #C4B5FD; font-weight: 800; font-size: 12.5px; border-radius: 999px; padding: 7px 15px; text-transform: capitalize; }
+  .rp-body { padding: 26px 26px 40px; max-width: 1020px; }
+  .rp-hero h2 { font-size: 30px; letter-spacing: -0.8px; line-height: 1.15; }
+  .rp-hero h2 em { font-style: normal; background: linear-gradient(90deg, #B8F135, #34D399); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .rp-hero p { color: var(--mut); margin-top: 6px; font-size: 14.5px; }
+  .rp-eyebrow { color: var(--lime); font-size: 11px; font-weight: 800; letter-spacing: 2.5px; margin: 28px 0 4px; }
+  .rp-h3 { font-size: 20px; letter-spacing: -0.4px; margin-bottom: 14px; }
+  .rp-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .rp-stat { background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 18px; padding: 16px; position: relative; overflow: hidden; }
+  .rp-stat::after { content: ''; position: absolute; top: 0; left: 16px; right: 16px; height: 3px; border-radius: 99px; background: var(--ac, var(--lime)); opacity: .9; }
+  .rp-stat small { color: var(--mut); font-size: 10.5px; font-weight: 800; letter-spacing: 1.2px; }
+  .rp-num { font-size: 30px; font-weight: 800; letter-spacing: -1px; margin: 4px 0 8px; text-transform: capitalize; }
+  .rp-delta { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 3px 10px; }
+  .rp-delta.up { background: rgba(52,211,153,.14); color: var(--ok); }
+  .rp-delta.info { background: rgba(167,139,250,.14); color: #C4B5FD; }
+  .rp-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .rp-act { display: block; background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 18px; padding: 18px; position: relative; transition: transform .12s, border-color .15s; }
+  .rp-act:hover { transform: translateY(-3px); border-color: rgba(184,241,53,.5); }
+  .rp-tile { width: 44px; height: 44px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .rp-act h4 { margin: 12px 0 4px; font-size: 15.5px; }
+  .rp-act p { color: var(--mut); font-size: 12.5px; line-height: 1.5; }
+  .rp-go { position: absolute; top: 16px; right: 18px; color: var(--dim); }
+  .rp-act:hover .rp-go { color: var(--lime); }
+  .rp-strip { display: flex; gap: 10px; margin-top: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; align-items: center; }
+  .rp-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); flex-shrink: 0; animation: pulse 2s infinite; }
+  @keyframes pulse { 50% { opacity: .5; } }
+  .rp-strip p { font-size: 13px; color: var(--mut); }
+  .rp-strip p b { color: var(--txt); }
+
+  /* ---- Mobile ---- */
+  .rp-tabbar, .rp-fab { display: none; }
+  .frame.mobile .rp-side { display: none; }
+  .frame.mobile .rp-burg { display: flex; align-items: center; justify-content: center; }
+  .frame.mobile .rp-grid4 { grid-template-columns: 1fr 1fr; }
+  .frame.mobile .rp-grid3 { grid-template-columns: 1fr; }
+  .frame.mobile .rp-body { padding: 18px 14px 120px; }
+  .frame.mobile .rp-hero h2 { font-size: 24px; }
+  .frame.mobile .rp-top { padding: 10px 14px; }
+  .frame.mobile .rp-plan { font-size: 11px; padding: 5px 11px; }
+  .frame.mobile .rp-tabbar { display: flex; position: sticky; bottom: 0; background: rgba(13,17,32,.97); border-top: 1px solid var(--line); padding: 8px 4px calc(8px + env(safe-area-inset-bottom)); z-index: 5; }
+  .frame.mobile .rp-tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--dim); font-size: 10.5px; font-weight: 800; padding: 6px 0; border-radius: 12px; }
+  .frame.mobile .rp-tab span:first-child { font-size: 20px; }
+  .frame.mobile .rp-tab.on { color: var(--lime); }
+  .frame.mobile .rp-fab { display: flex; position: sticky; bottom: 84px; margin-left: auto; margin-right: 12px; width: 52px; height: 52px; border-radius: 50%; background: var(--lime); color: var(--limedk); font-size: 24px; align-items: center; justify-content: center; box-shadow: 0 10px 26px rgba(184,241,53,.4); z-index: 6; }
+</style>
+</head>
+<body>
+
+<div class="proto-head">
+  <h1>Proposta de redesign — <span>"Radar Pulse"</span></h1>
+  <p>Nova identidade: verde-limão sobre grafite azulado, sidebar com seções, cards com trilho de cor, mobile com tabbar. Alterne a largura para ver o responsivo.</p>
+</div>
+
+<div class="view-switch">
+  <button class="on" onclick="setView('desk', this)">🖥️ Desktop</button>
+  <button onclick="setView('tab', this)">📱 Tablet</button>
+  <button onclick="setView('mobile', this)">📲 Celular</button>
+</div>
+
+<div class="frame" id="frame">
+<div class="rp">
+  <div class="rp-shell">
+
+    <!-- SIDEBAR -->
+    <aside class="rp-side">
+      <div class="rp-logo"><span class="rp-mark">📡</span> Cupom Radar</div>
+      <div class="rp-user"><div class="rp-ava">ES</div><div><small>USUÁRIO</small><b>Estilo Do Campo</b></div></div>
+      <div class="rp-sec">MENU</div>
+      <a class="rp-nav on" href="#"><span class="rp-ico">🏠</span> Início</a>
+      <a class="rp-nav" href="#"><span class="rp-ico">🤖</span> Robô</a>
+      <a class="rp-nav" href="#"><span class="rp-ico">💎</span> Planos</a>
+      <a class="rp-nav" href="#"><span class="rp-ico">📊</span> Relatórios</a>
+      <div class="rp-sec">AUTOMAÇÃO</div>
+      <a class="rp-nav" href="#"><span class="rp-ico">✏️</span> Criar oferta</a>
+      <a class="rp-nav" href="#"><span class="rp-ico">📑</span> Copiador <span class="rp-count">2</span></a>
+      <a class="rp-nav" href="#"><span class="rp-ico">🔀</span> Distribuidor <span class="rp-count">2</span></a>
+      <div class="rp-sub">
+        <a class="rp-nav" href="#"><span class="rp-ico">🚀</span> Envio</a>
+        <a class="rp-nav" href="#"><span class="rp-ico">📋</span> Fila</a>
+        <a class="rp-nav" href="#"><span class="rp-ico">🎉</span> Sorteio</a>
+      </div>
+      <div class="rp-sec">CONTA</div>
+      <a class="rp-nav" href="#"><span class="rp-ico">👤</span> Seus dados</a>
+      <a class="rp-nav" href="#"><span class="rp-ico">❓</span> Ajuda</a>
+      <div class="rp-sup">
+        <b>🚀 Turbinar vendas?</b>
+        <p>Fale com o suporte e configure seus 2 números.</p>
+        <button class="rp-btn lime">💬 Falar com suporte</button>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div class="rp-main">
+      <header class="rp-top">
+        <button class="rp-burg">☰</button>
+        <div class="rp-hello">
+          <small>Boa tarde, Estilo</small>
+          <b>Visão geral</b>
+          <div class="rp-crumb">Início <i>›</i> Visão geral</div>
+        </div>
+        <a class="rp-plan" href="#">💎 master</a>
+      </header>
+
+      <div class="rp-body">
+        <div class="rp-hero">
+          <h2>Boa tarde, Estilo <em>👋</em></h2>
+          <p>Crie postagens, automatize envios e encontre o que precisa para avançar.</p>
+        </div>
+
+        <div class="rp-eyebrow">DESTAQUES</div>
+        <h3 class="rp-h3">Sua operação</h3>
+        <div class="rp-grid4">
+          <div class="rp-stat" style="--ac:#A78BFA"><small>PLANO ATUAL</small><div class="rp-num">Master</div><a class="rp-btn ghost sm" href="#">Gerenciar</a></div>
+          <div class="rp-stat" style="--ac:#B8F135"><small>POSTS HOJE</small><div class="rp-num">12</div><span class="rp-delta up">▲ +3 hoje</span></div>
+          <div class="rp-stat" style="--ac:#FBBF24"><small>AGENDADOS</small><div class="rp-num">5</div><a class="rp-btn ghost sm" href="#">Ver fila</a></div>
+          <div class="rp-stat" style="--ac:#34D399"><small>DISPAROS</small><div class="rp-num">1.284</div><span class="rp-delta up">▲ +12%</span></div>
+        </div>
+
+        <div class="rp-eyebrow">PRÓXIMOS PASSOS</div>
+        <h3 class="rp-h3">Continue configurando</h3>
+        <div class="rp-grid3">
+          <a class="rp-act" href="#"><span class="rp-go">↗</span><div class="rp-tile" style="background:#2A2145">🤖</div><h4>Configure o robô</h4><p>Conecte o WhatsApp e suas lojas de afiliado.</p></a>
+          <a class="rp-act" href="#"><span class="rp-go">↗</span><div class="rp-tile" style="background:#22331A">🚀</div><h4>Envio automático</h4><p>Defina o grupo padrão e dispare sozinho.</p></a>
+          <a class="rp-act" href="#"><span class="rp-go">↗</span><div class="rp-tile" style="background:#3A2A10">📊</div><h4>Relatórios</h4><p>Acompanhe cliques e disparos enviados.</p></a>
+        </div>
+
+        <div class="rp-strip">
+          <span class="rp-dot"></span>
+          <p><b>2 números conectados</b> · wa1 554599513623 · wa2 554599950907 · última oferta há 12 min com foto anexada</p>
+        </div>
+      </div>
+
+      <div class="rp-fab">💬</div>
+      <nav class="rp-tabbar">
+        <a class="rp-tab on" href="#"><span>🏠</span>Início</a>
+        <a class="rp-tab" href="#"><span>✏️</span>Criar</a>
+        <a class="rp-tab" href="#"><span>📑</span>Copiador</a>
+        <a class="rp-tab" href="#"><span>☰</span>Menu</a>
+      </nav>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<script>
+  function setView(v, btn) {
+    document.querySelectorAll('.view-switch button').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    const f = document.getElementById('frame');
+    f.classList.remove('mobile');
+    if (v === 'mobile') { f.classList.add('mobile'); f.style.width = '390px'; }
+    else if (v === 'tab') { f.style.width = '768px'; }
+    else { f.style.width = '1200px'; }
+  }
+</script>
+</body>
+</html>
