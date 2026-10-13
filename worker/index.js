@@ -250,6 +250,8 @@ function isProductPage(u) {
     return /\/mlb-[0-9]+/.test(s)
       || /produto\.mercadolivre\.com\.br\//.test(s)
       || /shopee\.[^/]+\/(.*product|.*-i\.\d+\.\d+)/i.test(s)
+      // Link de afiliado Shopee expandido: shopee.com.br/opaanlp/{shopid}/{itemid}
+      || /shopee\.[^/]+\/[^/?#]+\/\d+\/\d+/.test(s)
       || /\/(dp|gp\/product)\/[a-z0-9]+/i.test(s)
       || /shein\.[^/]+\/.*-p-[0-9]+\.html/i.test(s)
       || /magazineluiza\.com\.br\/.*\/p\//i.test(s);
@@ -281,6 +283,14 @@ async function baixarImagemUrl(src, pageUrl, timeoutMs = 10000) {
 
 // Fallback: foto via busca de imagens do DuckDuckGo (sem chave), casando o título.
 // Só aceita parecido (>= 0.5) para não anexar foto de outro produto.
+// Score bidirecional: títulos truncados (Bing/DDG) ainda casam com a dica.
+function scoreTitulo(hw, tw) {
+  if (!tw.length) return 0;
+  const a = hw.filter((w) => tw.includes(w)).length / hw.length;
+  const b = tw.filter((w) => hw.includes(w)).length / tw.length;
+  return Math.max(a, b);
+}
+
 async function buscarImagemDdg(hints, timeoutMs = 8000) {
   try {
     const hint = (hints || []).find((h) => normWords(h).length >= 3);
@@ -303,13 +313,14 @@ async function buscarImagemDdg(hints, timeoutMs = 8000) {
     const j = await r.json().catch(() => null);
     const results = (j && j.results) || [];
     log.info({ q: query.slice(0, 60), n: results.length }, 'foto DDG: resultados');
+    if (!results.length) return null;
     const hw = normWords(hint);
     // Candidatos com score; thumbnail do Bing entra como reserva (-0.05)
     const cands = [];
     for (const it of results.slice(0, 12)) {
       const tw = normWords(it.title || '');
       if (!tw.length) continue;
-      const score = hw.filter((w) => tw.includes(w)).length / hw.length;
+      const score = scoreTitulo(hw, tw);
       if (score < 0.5) continue;
       if (it.image) cands.push({ score, url: it.image });
       if (it.thumbnail) cands.push({ score: score - 0.05, url: it.thumbnail });
@@ -329,31 +340,88 @@ async function buscarImagemDdg(hints, timeoutMs = 8000) {
   } catch { return null; }
 }
 
-// Baixa a foto do anúncio quando a oferta veio só texto:
-// 1) og:image da página do produto  2) busca de imagens pelo título
-async function buscarImagemProduto(pageUrl, hints, timeoutMs = 10000) {
+// Fallback 2: busca de imagens do Bing (sem chave). Entra quando o DDG
+// está em rate-limit (HTTP 202) ou sem resultados.
+async function buscarImagemBing(hints, timeoutMs = 8000) {
   try {
-    log.info({ url: String(pageUrl).slice(0, 100) }, 'foto: tentando enriquecer oferta sem imagem');
+    const hint = (hints || []).find((h) => normWords(h).length >= 3);
+    if (!hint) return null;
+    const query = normWords(hint).join(' ');
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    const r = await fetch(pageUrl, {
-      redirect: 'follow', signal: ctrl.signal,
+    const r = await fetch('https://www.bing.com/images/search?q=' + encodeURIComponent(query) + '&form=HDRSC2&first=1', {
+      signal: ctrl.signal,
       headers: { 'User-Agent': UA_NAV, 'Accept-Language': 'pt-BR,pt;q=0.9' },
     });
     clearTimeout(t);
-    if (!r.ok) { log.info({ status: r.status, url: pageUrl.slice(0, 80) }, 'foto og:image: página recusada'); return null; }
-    if (!String(r.headers.get('content-type') || '').toLowerCase().includes('html')) return null;
+    if (!r.ok) { log.info({ status: r.status }, 'foto Bing: recusado'); return null; }
     const html = await r.text();
-    if (!html || html.length > 3000000) return null;
-    const m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
-      || html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
-    let src = m && m[1] ? m[1].trim().replace(/&amp;/g, '&') : null;
-    if (!src) log.info('foto og:image: ausente, tentando DDG');
-    const img = src ? await baixarImagemUrl(src, pageUrl, timeoutMs) : null;
-    if (img) return img;
-    // Página sem og:image (ex.: ML renderiza via JS) -> busca pelo título
-    return await buscarImagemDdg(hints, timeoutMs);
+    const hw = normWords(hint);
+    // Bing embute cada resultado em murl&quot;:&quot;URL&quot;...&quot;t&quot;:&quot;Título&quot;
+    const parts = html.split('murl&quot;:&quot;');
+    const cands = [];
+    for (const p of parts.slice(1, 13)) {
+      const url = p.split('&quot;')[0].replace(/&amp;/g, '&');
+      if (!/^https?:\/\//i.test(url)) continue;
+      const tm = p.slice(0, 4000).match(/&quot;t&quot;:&quot;([\s\S]*?)&quot;/);
+      const tw = normWords(tm ? tm[1] : '');
+      const score = scoreTitulo(hw, tw);
+      if (score < 0.5) continue;
+      cands.push({ score, url });
+    }
+    const bonus = (u) => (/\.(jpe?g|png)(\?|#|$)/i.test(u) ? 0.1 : 0);
+    cands.sort((a, b) => (b.score + bonus(b.url)) - (a.score + bonus(a.url)));
+    const bestScore = cands.length ? (cands[0].score + bonus(cands[0].url)) : 0;
+    log.info({ n: cands.length, score: Number(bestScore.toFixed(2)) }, 'foto Bing: candidatos');
+    for (const c of cands.slice(0, 3)) {
+      const buf = await baixarImagemUrl(c.url, 'https://www.bing.com/', timeoutMs);
+      if (buf) return buf;
+    }
+    log.info('foto Bing: nenhum download válido');
+    return null;
+  } catch { return null; }
+}
+
+// Baixa a foto do anúncio quando a oferta veio só texto:
+// 1) og:image da página do produto  2) busca de imagens pelo título (DDG, depois Bing)
+async function buscarImagemProduto(pageUrl, hints, timeoutMs = 10000) {
+  try {
+    log.info({ url: String(pageUrl).slice(0, 100) }, 'foto: tentando enriquecer oferta sem imagem');
+    let src = null;
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      const r = await fetch(pageUrl, {
+        redirect: 'follow', signal: ctrl.signal,
+        headers: { 'User-Agent': UA_NAV, 'Accept-Language': 'pt-BR,pt;q=0.9' },
+      });
+      clearTimeout(t);
+      if (!r.ok) {
+        log.info({ status: r.status, url: pageUrl.slice(0, 80) }, 'foto og:image: página recusada, indo por título');
+      } else if (String(r.headers.get('content-type') || '').toLowerCase().includes('html')) {
+        const html = await r.text();
+        if (html && html.length <= 3000000) {
+          const m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+            || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+            || html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
+          src = m && m[1] ? m[1].trim().replace(/&amp;/g, '&') : null;
+        }
+      }
+    } catch (e) {
+      log.info({ e: String(e).slice(0, 80) }, 'foto og:image: fetch falhou, indo por título');
+    }
+    if (src) {
+      const img = await baixarImagemUrl(src, pageUrl, timeoutMs);
+      if (img) return img;
+      log.info('foto og:image: download falhou, indo por título');
+    } else {
+      log.info('foto og:image: ausente (SPA), indo por título');
+    }
+    // Página sem og:image (ex.: Shopee/ML renderizam via JS) -> busca pelo título:
+    // DDG primeiro; se bloqueado (202/rate-limit), Bing.
+    const viaDdg = await buscarImagemDdg(hints, timeoutMs).catch(() => null);
+    if (viaDdg) return viaDdg;
+    return await buscarImagemBing(hints, timeoutMs).catch(() => null);
   } catch { return null; }
 }
 
@@ -752,7 +820,9 @@ async function handleDistribuidor(msg, slot) {
     let destino = null;
     if (d.convert) {
       const r = await convertTextLinks(text, d.affIds, d.shopeeCreds, d.mlMattTool, d.userId, d.stripCoupons, d.slot);
-      if (r.converted) { out = r.out; destino = r.destino || null; }
+      if (r.converted) out = r.out;
+      // Usa a página do produto para a foto mesmo quando a conversão falhou
+      if (r.destino) destino = r.destino;
     }
     if (d.prefix) out = `${d.prefix}\n\n${out}`;
     if (d.suffix) out = `${out}\n\n${d.suffix}`;
