@@ -5,6 +5,26 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
 
+// Anti-força-bruta: 10 falhas em 10 min por e-mail bloqueiam temporariamente.
+// Memória local (zera no deploy); login Google não é afetado.
+const loginFails = new Map<string, number[]>();
+const LOGIN_MAX = 10;
+const LOGIN_WIN = 10 * 60 * 1000;
+
+function loginBloqueado(email: string): boolean {
+  const now = Date.now();
+  const arr = (loginFails.get(email) || []).filter((t) => now - t < LOGIN_WIN);
+  if (loginFails.size > 5000) loginFails.clear();
+  else loginFails.set(email, arr);
+  return arr.length >= LOGIN_MAX;
+}
+
+function marcarFalhaLogin(email: string) {
+  const arr = loginFails.get(email) || [];
+  arr.push(Date.now());
+  loginFails.set(email, arr);
+}
+
 const providers: NextAuthOptions['providers'] = [
   CredentialsProvider({
     name: 'Email',
@@ -16,6 +36,7 @@ const providers: NextAuthOptions['providers'] = [
       const email = credentials?.email?.toLowerCase().trim();
       const password = credentials?.password || '';
       if (!email || !email.includes('@')) return null;
+      if (loginBloqueado(email)) return null;
       let user = await prisma.user.findUnique({ where: { email } }).catch(() => null);
       if (!user) {
         // Primeiro acesso: cria conta — exige senha válida (nunca cria conta sem senha)
@@ -27,9 +48,11 @@ const providers: NextAuthOptions['providers'] = [
         // Conta OAuth (Google) ou legada sem senha: só entra pelo botão do Google
         return null;
       } else if (!password || !(await bcrypt.compare(password, user.passwordHash).catch(() => false))) {
+        marcarFalhaLogin(email);
         return null;
       }
       if (!user) return null;
+      loginFails.delete(email);
       return { id: user.id, email: user.email, name: user.name };
     },
   }),

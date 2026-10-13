@@ -24,6 +24,23 @@ export default function Dados() {
     setMsg(r.ok ? '✅ Nome salvo!' : `❌ ${r.error}`);
   }
 
+  async function exportar() {
+    setMsg('Gerando backup...');
+    try {
+      const r = await fetch('/api/profile/export');
+      if (!r.ok) throw new Error('falha');
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'cupom-radar-dados.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setMsg('✅ Backup baixado!');
+    } catch {
+      setMsg('❌ Falha no backup');
+    }
+  }
+
   async function changePw() {
     if (pw1 !== pw2) { setMsg('❌ As senhas não conferem'); return; }
     const r = await fetch('/api/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw1 }) }).then((x) => x.json());
@@ -58,6 +75,8 @@ export default function Dados() {
           <div className="row"><div><small className="hint">EMAIL</small><br /><b>{stats?.email}</b></div></div>
           <div className="row"><div><small className="hint">STATUS</small><br /><b>Ativa</b></div><span className={`badge ${stats?.verified ? 'badge-ok' : 'badge-warn'}`}>{stats?.verified ? '✓' : '!'}</span></div>
           <div className="row"><div style={{ flex: 1 }}><small className="hint">NOME</small><input className="input" style={{ margin: '4px 0 0' }} value={name} onChange={(e) => setName(e.target.value)} /></div><button className="btn btn-ghost btn-sm" onClick={saveName}>Salvar</button></div>
+          <div className="row"><div><small className="hint">BACKUP</small><br /><b>Baixar meus dados</b></div><button className="btn btn-ghost btn-sm" onClick={exportar}>⬇ JSON</button></div>
+          {msg && <p>{msg}</p>}
         </div>
 
         <div className="card" style={{ marginTop: 10 }}>
