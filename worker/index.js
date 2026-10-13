@@ -1062,12 +1062,18 @@ function canSendTo(sock, g) {
   if (!g.participants) return true; // sem dados: não bloqueia
   const adm = g.participants.filter((p) => p.admin);
   if (!adm.length) return true;
-  const me = meId(sock);
-  const lid = meLid(sock);
+  // Todas as formas do meu número (telefone, LID, só-dígitos, minúsculo):
+  // cobre @lid/@s.whatsapp.net/:dispositivo para não dar falso "sem permissão".
+  const mine = new Set();
+  for (const v of [meId(sock), meLid(sock)]) {
+    const b = String(v || '').split('@')[0].split(':')[0];
+    if (b) { mine.add(b.toLowerCase()); mine.add(b.replace(/\D/g, '')); }
+  }
+  if (!mine.size || mine.has('')) return true; // não sei quem sou: não bloqueia
   return adm.some((p) => {
-    const pn = (p.id || '').split('@')[0].split(':')[0];
-    const pl = (p.lid || '').split('@')[0];
-    return (me && pn === me) || (lid && pl === lid);
+    const forms = [p.id, p.lid, p.phone].filter(Boolean)
+      .map((x) => String(x).split('@')[0].split(':')[0].toLowerCase());
+    return forms.some((f) => mine.has(f) || (f && mine.has(f.replace(/\D/g, ''))));
   });
 }
 
