@@ -17,3 +17,6 @@ Thumbs.db
 
 # vercel
 .vercel
+
+# tsc
+tsconfig.tsbuildinfo
