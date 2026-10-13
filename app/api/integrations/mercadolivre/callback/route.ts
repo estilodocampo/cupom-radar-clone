@@ -12,9 +12,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${base}/dashboard/robo?ml=negado`);
   }
   if (!code || !state) return NextResponse.redirect(`${base}/dashboard/robo?ml=erro`);
-  const pkce = await prisma.integration.findFirst({ where: { provider: 'ml_pkce' } }).catch(() => null);
+  // Busca pela state apresentada (não pela primeira linha): imune a fluxos
+  // abandonados de outro usuário/dispositivo.
+  const pkce = await prisma.integration.findFirst({
+    where: { provider: 'ml_pkce', config: { path: ['state'], equals: state } },
+  }).catch(() => null);
   const cfg = pkce?.config as { state?: string; verifier?: string } | null;
-  if (!pkce || cfg?.state !== state || !cfg?.verifier) {
+  if (!pkce || !cfg?.verifier) {
     return NextResponse.redirect(`${base}/dashboard/robo?ml=estado`);
   }
   try {

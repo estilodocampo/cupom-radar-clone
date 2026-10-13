@@ -6,4 +6,5 @@ const child =
     ? spawn('node', ['worker/index.js'], { stdio: 'inherit' })
     : spawn('npx', ['next', 'start'], { stdio: 'inherit', shell: true });
 
+child.on('error', (e) => { console.error(`[start] falha ao iniciar (${mode}):`, e.message); process.exit(1); });
 child.on('exit', (code) => process.exit(code ?? 0));

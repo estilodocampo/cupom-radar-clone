@@ -49,6 +49,8 @@ export async function POST(req: NextRequest) {
   const raw = await req.text().catch(() => '');
   if (!raw) return NextResponse.json({ ok: false }, { status: 400 });
   if (!verifySignature(raw, req)) return NextResponse.json({ ok: false }, { status: 401 });
+  const signed = ['x-webhook-signature', 'x-abacate-signature', 'abacatepay-signature', 'x-signature'].some((h) => !!req.headers.get(h));
+  if (!signed) console.warn('[abacatepay] webhook aceito sem assinatura — ative o header de assinatura no provedor');
 
   const body = JSON.parse(raw) as Record<string, unknown>;
   const event = String((body.event ?? body.type ?? '')).toUpperCase();
