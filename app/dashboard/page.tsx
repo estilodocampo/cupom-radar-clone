@@ -54,33 +54,38 @@ export default function Overview() {
   const first = (session?.user?.name || session?.user?.email || '').split(/[\s@]/)[0] || 'você';
 
   useEffect(() => {
-    fetch('/api/stats').then((r) => r.json()).then(setStats).catch(() => setStats({}));
-    fetch('/api/whatsapp/status').then((r) => r.json()).then((d) => setSlots(d?.slots || {})).catch(() => {});
-    fetch('/api/copiador/rules').then((r) => r.json()).then((d) => setCop(d?.items || [])).catch(() => {});
-    fetch('/api/distribuidor/rules').then((r) => r.json()).then((d) => setDis(d?.items || [])).catch(() => {});
-    fetch('/api/dispatches').then((r) => r.json()).then((d) => {
-      const items = ((d?.items || []) as Dispatch[]).filter((o) => (o.status || 'sent') === 'sent');
-      // 1 linha por destino: colapsa a mesma oferta (hub + distribuidor) numa só
-      const seen = new Set<string>();
-      const uniq = items.filter((o) => {
-        const fp = (o.message || '').replace(/⁣/g, '').trim();
-        if (!fp || seen.has(fp)) return false;
-        seen.add(fp);
-        return true;
-      });
-      setOffers(uniq.slice(0, 3));
-    }).catch(() => {});
-    (async () => {
-      const map: Record<string, string> = {};
-      for (const slot of ['wa1', 'wa2']) {
-        try {
-          const r = await fetch(`/api/whatsapp/groups?slot=${slot}`);
-          const d = await r.json();
-          for (const g of (d?.groups || []) as Group[]) map[g.id] = g.name;
-        } catch { /* mantém JID curto */ }
-      }
-      setNames(map);
-    })();
+    function carregar() {
+      fetch('/api/stats').then((r) => r.json()).then(setStats).catch(() => setStats({}));
+      fetch('/api/whatsapp/status').then((r) => r.json()).then((d) => setSlots(d?.slots || {})).catch(() => {});
+      fetch('/api/copiador/rules').then((r) => r.json()).then((d) => setCop(d?.items || [])).catch(() => {});
+      fetch('/api/distribuidor/rules').then((r) => r.json()).then((d) => setDis(d?.items || [])).catch(() => {});
+      fetch('/api/dispatches').then((r) => r.json()).then((d) => {
+        const items = ((d?.items || []) as Dispatch[]).filter((o) => (o.status || 'sent') === 'sent');
+        // 1 linha por destino: colapsa a mesma oferta (hub + distribuidor) numa só
+        const seen = new Set<string>();
+        const uniq = items.filter((o) => {
+          const fp = (o.message || '').replace(/⁣/g, '').trim();
+          if (!fp || seen.has(fp)) return false;
+          seen.add(fp);
+          return true;
+        });
+        setOffers(uniq.slice(0, 3));
+      }).catch(() => {});
+      (async () => {
+        const map: Record<string, string> = {};
+        for (const slot of ['wa1', 'wa2']) {
+          try {
+            const r = await fetch(`/api/whatsapp/groups?slot=${slot}`);
+            const d = await r.json();
+            for (const g of (d?.groups || []) as Group[]) map[g.id] = g.name;
+          } catch { /* mantém JID curto */ }
+        }
+        setNames(map);
+      })();
+    }
+    carregar();
+    const t = setInterval(carregar, 60000); // centro de operação ao vivo
+    return () => clearInterval(t);
   }, []);
 
   const gname = (jid?: string) => (jid && names[jid]) || shortJid(jid);

@@ -65,6 +65,21 @@ export async function GET() {
     return NextResponse.json({ configured: false });
   }
   const creds = { appId: cfg.appId, secret: cfg.secret };
+  const REPORT_TTL = 6 * 3600 * 1000;
+
+  // Cache auto-atualizado: responde na hora se fresco (<6h); senão busca ao vivo.
+  // Sem migration: guarda em Integration/provider shopee_report.
+  const rep = await prisma.integration
+    .findUnique({ where: { userId_provider: { userId: user.id, provider: 'shopee_report' } } })
+    .catch(() => null);
+  const rc = (rep?.config || {}) as {
+    at?: string;
+    totals?: { clicks: number; orders: number; commission: number; rows: number };
+    topProducts?: { name: string; orders: number; commission: number; clicks: number }[];
+  };
+  if (rc.at && rc.totals && Date.now() - new Date(rc.at).getTime() < REPORT_TTL) {
+    return NextResponse.json({ configured: true, totals: rc.totals, topProducts: rc.topProducts || [], at: rc.at, cached: true });
+  }
 
   // Descobre fonte de cliques (clickReport? trafficReport?) — loga 1x
   try {
@@ -143,9 +158,19 @@ export async function GET() {
     .slice(0, 10)
     .map((p) => ({ ...p, commission: Math.round(p.commission * 100) / 100 }));
 
+  const totals = { clicks, orders, commission: Math.round(commission * 100) / 100, rows: nodes.length };
+  const at = new Date().toISOString();
+  // Persiste o snapshot (só em sucesso): próxima abertura responde na hora
+  await prisma.integration.upsert({
+    where: { userId_provider: { userId: user.id, provider: 'shopee_report' } },
+    update: { config: { totals, topProducts, at } },
+    create: { userId: user.id, provider: 'shopee_report', config: { totals, topProducts, at } },
+  }).catch(() => null);
+
   return NextResponse.json({
     configured: true,
-    totals: { clicks, orders, commission: Math.round(commission * 100) / 100, rows: nodes.length },
+    totals,
     topProducts,
+    at,
   });
 }
