@@ -240,7 +240,8 @@ a.card { text-decoration: none; color: inherit; display: block; }
   .tabitem {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     background: none; border: 0; cursor: pointer; padding: 6px 2px; min-height: 52px;
-    color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: none; border-radius: 10px;
+    color: var(--muted); font-size: 10px; font-weight: 700; text-decoration: none; border-radius: 10px;
+    white-space: nowrap;
   }
   .tabitem .tabico { font-size: 19px; line-height: 1; }
   .tabitem.active { color: var(--green); }

@@ -52,6 +52,7 @@ const TABS: { href: string; label: string; icon: string }[] = [
   { href: '/dashboard', label: 'Início', icon: '🏠' },
   { href: '/dashboard/postagens/produtos', label: 'Criar', icon: '✏️' },
   { href: '/dashboard/postagens/copiador', label: 'Copiador', icon: '📑' },
+  { href: '/dashboard/postagens/distribuidor', label: 'Distribuidor', icon: '🔀' },
 ];
 
 function greeting() {
