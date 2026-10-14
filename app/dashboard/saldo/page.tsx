@@ -18,16 +18,42 @@ const STORES = [
 
 const br = (v: number, d = 0) => v.toFixed(d).replace('.', ',');
 
+const parseBr = (s: string): number => {
+  const n = Number(String(s || '').replace(/R\$\s?/i, '').replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+};
+
 export default function Saldo() {
   const [byStore, setByStore] = useState<StoreStat[]>([]);
   const [shopee, setShopee] = useState<Shopee | null>(null);
+  const [saldos, setSaldos] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState('');
 
   useEffect(() => {
     fetch('/api/links/stats').then((r) => r.json()).then((d) => setByStore(d.byStore || [])).catch(() => {});
     fetch('/api/shopee/report').then((r) => r.json()).then(setShopee).catch(() => setShopee({ error: 'Falha ao consultar' }));
+    fetch('/api/integrations').then((r) => r.json()).then((d) => {
+      const it = (d?.items || []).find((x: { provider: string }) => x.provider === 'saldos');
+      const c = (it?.config || {}) as Record<string, number>;
+      const m: Record<string, string> = {};
+      for (const s of STORES) if (c[s.id] > 0) m[s.id] = String(c[s.id]).replace('.', ',');
+      setSaldos(m);
+    }).catch(() => {});
   }, []);
 
   const st = (id: string) => byStore.find((b) => b.store === id) || { links: 0, clicks: 0 };
+  const saldoDe = (id: string) => parseBr(saldos[id] || '');
+
+  async function salvarSaldos() {
+    const cfg: Record<string, number> = {};
+    for (const s of STORES) {
+      const v = parseBr(saldos[s.id] || '');
+      if (v > 0) cfg[s.id] = v;
+    }
+    const r = await fetch('/api/integrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'saldos', config: cfg }) }).then((x) => x.json()).catch(() => null);
+    setMsg(r?.ok ? '✅ Salvo!' : '❌ Falha ao salvar');
+    setTimeout(() => setMsg(''), 2500);
+  }
 
   return (
     <div className="dash">
@@ -74,11 +100,12 @@ export default function Saldo() {
 
       {STORES.map((s) => {
         const v = st(s.id);
+        const sd = saldoDe(s.id);
         return (
           <div key={s.id}>
             <div className="op-sec">
               <h3>{s.icon} {s.name}</h3>
-              <small>/r/</small>
+              <small>/r/{sd > 0 ? ` · R$ ${br(sd, 2)}` : ''}</small>
               {s.panel ? <a href={s.panel} target="_blank" rel="noreferrer">painel ↗</a> : null}
             </div>
             <div className="op-today">
@@ -89,6 +116,23 @@ export default function Saldo() {
           </div>
         );
       })}
+
+      <div className="op-sec">
+        <h3>💰 Meus saldos</h3>
+        <small>manual</small>
+      </div>
+      <div className="card" style={{ maxWidth: 720 }}>
+        {STORES.map((s) => (
+          <div className="row" key={s.id}>
+            <div style={{ flex: 1 }}><small className="hint">{s.icon} {s.name.toUpperCase()} (R$)</small>
+              <input className="input" style={{ margin: '4px 0 0' }} inputMode="decimal" placeholder="0,00"
+                value={saldos[s.id] || ''} onChange={(e) => setSaldos({ ...saldos, [s.id]: e.target.value })} />
+            </div>
+          </div>
+        ))}
+        <button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={salvarSaldos}>Salvar saldos</button>
+        {msg && <p>{msg}</p>}
+      </div>
     </div>
   );
 }
