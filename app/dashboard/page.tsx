@@ -4,8 +4,8 @@ import { useSession } from 'next-auth/react';
 
 type Stats = { plan?: string; postsToday?: number; scheduledPending?: number; sentTotal?: number };
 type Slot = { connected?: boolean; phone?: string };
-type CopRule = { id: string; name?: string; slot?: string; source?: string; hub?: string; active?: boolean };
-type DisRule = { id: string; name?: string; slot?: string; hub?: string; targets?: string[]; pausado?: boolean };
+type CopRule = { id: string; name?: string; slot?: string; source?: string; hub?: string; keepCoupons?: boolean; active?: boolean };
+type DisRule = { id: string; name?: string; slot?: string; hub?: string; targets?: string[]; onlyMine?: boolean; requireLink?: boolean; convert?: boolean; stripCoupons?: boolean; prefix?: string; suffix?: string; minInterval?: number; maxPerDay?: number; dedupHoras?: number; pausado?: boolean };
 type Dispatch = { message?: string; groupJid?: string; kind?: string; status?: string; sentAt?: string };
 type Group = { id: string; name: string };
 
@@ -53,6 +53,37 @@ export default function Overview() {
   const [offers, setOffers] = useState<Dispatch[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const first = (session?.user?.name || session?.user?.email || '').split(/[\s@]/)[0] || 'você';
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  async function toggleRegra(kind: 'cop' | 'dis', id: string) {
+    if (toggling) return;
+    setToggling(id);
+    try {
+      if (kind === 'cop') {
+        const r = cop.find((x) => x.id === id);
+        if (!r) return;
+        const active = r.active === false;
+        setCop((cs) => cs.map((x) => (x.id === id ? { ...x, active } : x)));
+        const res = await fetch('/api/copiador/rules', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: r.id, name: r.name || '', slot: r.slot || 'wa1', source: r.source || '', hub: r.hub || '', keepCoupons: !!r.keepCoupons, active }),
+        });
+        if (!res.ok) setCop((cs) => cs.map((x) => (x.id === id ? { ...x, active: !active } : x)));
+      } else {
+        const r = dis.find((x) => x.id === id);
+        if (!r) return;
+        const pausado = !r.pausado;
+        setDis((ds) => ds.map((x) => (x.id === id ? { ...x, pausado } : x)));
+        const res = await fetch('/api/distribuidor/rules', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...r, pausado }),
+        });
+        if (!res.ok) setDis((ds) => ds.map((x) => (x.id === id ? { ...x, pausado: !pausado } : x)));
+      }
+    } finally {
+      setToggling(null);
+    }
+  }
 
   useEffect(() => {
     function carregar() {
@@ -167,18 +198,22 @@ export default function Overview() {
         </div>
       )}
       {cop.slice(0, 2).map((c) => (
-        <a className="op-rule" key={c.id} href="/dashboard/postagens/copiador">
-          <div className="op-rtile">📑</div>
-          <div><b>Copiador · {c.slot || 'wa1'}{c.name ? ` · ${c.name}` : ''}</b><small>{gname(c.source)} <i>→</i> {gname(c.hub)}</small></div>
-          <span className={`op-tgl${c.active === false ? ' off' : ''}`} />
-        </a>
+        <div className="op-rule" key={c.id}>
+          <a href="/dashboard/postagens/copiador" style={{ display: 'flex', alignItems: 'center', gap: 11, flex: 1, minWidth: 0, color: 'inherit', textDecoration: 'none' }}>
+            <div className="op-rtile">📑</div>
+            <div><b>Copiador · {c.slot || 'wa1'}{c.name ? ` · ${c.name}` : ''}</b><small>{gname(c.source)} <i>→</i> {gname(c.hub)}</small></div>
+          </a>
+          <button type="button" className={`op-tgl${c.active === false ? ' off' : ''}`} aria-pressed={c.active !== false} aria-label={c.active === false ? 'Ligar regra' : 'Desligar regra'} disabled={toggling === c.id} onClick={() => toggleRegra('cop', c.id)} />
+        </div>
       ))}
       {dis.slice(0, 2).map((d) => (
-        <a className="op-rule" key={d.id} href="/dashboard/postagens/distribuidor">
-          <div className="op-rtile" style={{ background: '#252a45' }}>🔀</div>
-          <div><b>Distribuidor · {d.slot || 'wa1'}{d.name ? ` · ${d.name}` : ''}</b><small>{gname(d.hub)} <i>→</i> {(d.targets || []).length} grupo{((d.targets || []).length === 1) ? '' : 's'}</small></div>
-          <span className={`op-tgl${d.pausado ? ' off' : ''}`} />
-        </a>
+        <div className="op-rule" key={d.id}>
+          <a href="/dashboard/postagens/distribuidor" style={{ display: 'flex', alignItems: 'center', gap: 11, flex: 1, minWidth: 0, color: 'inherit', textDecoration: 'none' }}>
+            <div className="op-rtile" style={{ background: '#252a45' }}>🔀</div>
+            <div><b>Distribuidor · {d.slot || 'wa1'}{d.name ? ` · ${d.name}` : ''}</b><small>{gname(d.hub)} <i>→</i> {(d.targets || []).length} grupo{((d.targets || []).length === 1) ? '' : 's'}</small></div>
+          </a>
+          <button type="button" className={`op-tgl${d.pausado ? ' off' : ''}`} aria-pressed={!d.pausado} aria-label={d.pausado ? 'Ligar regra' : 'Desligar regra'} disabled={toggling === d.id} onClick={() => toggleRegra('dis', d.id)} />
+        </div>
       ))}
 
       <div className="op-sec">
