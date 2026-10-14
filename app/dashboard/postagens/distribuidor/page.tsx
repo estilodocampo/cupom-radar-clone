@@ -64,7 +64,18 @@ export default function Distribuidor() {
       fetch('/api/distribuidor/rules').then((r) => r.json()).catch(() => null),
       fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null),
     ]);
-    setRules((d?.items || []) as Rule[]);
+    const items = ((d?.items || []) as Rule[]);
+    setRules(items);
+    // Resolve nomes dos canais já salvos nas regras
+    const jids = [...new Set(items.flatMap((r) => r.targets || []).filter((t) => t.endsWith('@newsletter')))];
+    if (jids.length) {
+      const found: Record<string, string> = {};
+      await Promise.all(jids.map(async (j) => {
+        const c = await fetch(`/api/whatsapp/channel?jid=${encodeURIComponent(j)}&slot=${slot}`).then((r) => r.json()).catch(() => null);
+        if (c?.name) found[j] = c.name;
+      }));
+      if (Object.keys(found).length) setChanNames((m) => ({ ...m, ...found }));
+    }
     const slots = s?.slots || {};
     const ph: Record<string, string | undefined> = {};
     for (const k of ['wa1', 'wa2']) if (slots[k]?.phone) ph[k] = slots[k].phone;
@@ -257,6 +268,9 @@ export default function Distribuidor() {
         {mine.map((r) => (
           <div className="card" key={r.id} style={{ marginBottom: 8 }}>
             <b>{r.name || 'Distribuição'}</b> {r.pausado ? <span className="badge badge-err">PAUSADO</span> : <span className="badge badge-ok">ATIVO</span>}
+            {(r.targets || []).filter((t) => t.endsWith('@newsletter')).map((t) => (
+              <span key={t} className="badge badge-info" style={{ marginLeft: 6 }}>📢 {chanNames[t] || 'canal'}</span>
+            ))}
             {semPermissao(r.targets).length > 0 && <span className="badge badge-warn">⚠️ {semPermissao(r.targets).length} sem permissão</span>}
             <p className="hint">{gname(r.hub)} → {r.targets.length}{r.minInterval ? ` · 1/${r.minInterval}min` : ''}{r.maxPerDay ? ` · máx ${r.maxPerDay}/dia` : ''}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

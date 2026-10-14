@@ -29,8 +29,12 @@ export const worker = {
   groups: (slot: WaSlot = 'wa1', refresh = false) => call(`/groups?slot=${slot}${refresh ? '&refresh=1' : ''}`) as Promise<{ groups: { id: string; name: string }[] }>,
   participants: (groupJid: string, slot: WaSlot = 'wa1') =>
     call(`/participants?groupJid=${encodeURIComponent(groupJid)}&slot=${slot}`) as Promise<{ participants: { id: string; admin: string | null }[] }>,
-  channel: (invite: string, slot: WaSlot = 'wa1') =>
-    call(`/channel?invite=${encodeURIComponent(invite)}&slot=${slot}`) as Promise<{ id?: string; name?: string; description?: string; followers?: number | null; error?: string }>,
+  channel: (params: { invite?: string; jid?: string }, slot: WaSlot = 'wa1') => {
+    const q = params.jid
+      ? `jid=${encodeURIComponent(params.jid)}`
+      : `invite=${encodeURIComponent(params.invite || '')}`;
+    return call(`/channel?${q}&slot=${slot}`) as Promise<{ id?: string; name?: string; description?: string; followers?: number | null; error?: string }>;
+  },
   send: (to: string, text: string, slot: WaSlot = 'wa1') =>
     call('/send', { method: 'POST', body: JSON.stringify({ to, text, slot }) }),
   logout: (slot: WaSlot = 'wa1') =>
