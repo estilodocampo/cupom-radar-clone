@@ -58,7 +58,18 @@ export default function Overview() {
     fetch('/api/whatsapp/status').then((r) => r.json()).then((d) => setSlots(d?.slots || {})).catch(() => {});
     fetch('/api/copiador/rules').then((r) => r.json()).then((d) => setCop(d?.items || [])).catch(() => {});
     fetch('/api/distribuidor/rules').then((r) => r.json()).then((d) => setDis(d?.items || [])).catch(() => {});
-    fetch('/api/dispatches').then((r) => r.json()).then((d) => setOffers(((d?.items || []) as Dispatch[]).filter((o) => (o.status || 'sent') === 'sent').slice(0, 3))).catch(() => {});
+    fetch('/api/dispatches').then((r) => r.json()).then((d) => {
+      const items = ((d?.items || []) as Dispatch[]).filter((o) => (o.status || 'sent') === 'sent');
+      // 1 linha por destino: colapsa a mesma oferta (hub + distribuidor) numa só
+      const seen = new Set<string>();
+      const uniq = items.filter((o) => {
+        const fp = (o.message || '').replace(/⁣/g, '').trim();
+        if (!fp || seen.has(fp)) return false;
+        seen.add(fp);
+        return true;
+      });
+      setOffers(uniq.slice(0, 3));
+    }).catch(() => {});
     (async () => {
       const map: Record<string, string> = {};
       for (const slot of ['wa1', 'wa2']) {
@@ -90,21 +101,22 @@ export default function Overview() {
         <div className="op-status-head">
           <span className="op-pulse" style={anyOn ? undefined : { background: '#ef4444', boxShadow: 'none' }} />
           {anyOn ? 'OPERAÇÃO ATIVA' : 'OPERAÇÃO PAUSADA'}
-          <span>{stats ? `${stats.postsToday ?? 0} posts hoje` : 'carregando…'}</span>
+          <span>{stats ? `${stats.postsToday ?? 0} criadas hoje` : 'carregando…'}</span>
         </div>
         {(['wa1', 'wa2'] as const).map((s) => {
           const sl = slots[s] || {};
+          const ng = groupsOf(s);
           return (
             <div className="op-num" key={s}>
               <span className={`d${sl.connected ? '' : ' off'}`} />
               <b>{s}</b>
               <code>{sl.phone || 'desconectado'}</code>
-              <em>{groupsOf(s)} grupos</em>
+              <em>{ng} grupo{ng === 1 ? '' : 's'}</em>
             </div>
           );
         })}
         <div className="op-today">
-          <div className="op-mini"><small>POSTS HOJE</small><b>{stats?.postsToday ?? '…'}</b></div>
+          <div className="op-mini"><small>CRIADAS HOJE</small><b>{stats?.postsToday ?? '…'}</b></div>
           <div className="op-mini"><small>NA FILA</small><b>{stats?.scheduledPending ?? '…'}</b></div>
           <div className="op-mini"><small>DISPAROS</small><b>{stats?.sentTotal ?? '…'}</b></div>
         </div>
@@ -138,7 +150,7 @@ export default function Overview() {
       {dis.slice(0, 2).map((d) => (
         <a className="op-rule" key={d.id} href="/dashboard/postagens/distribuidor">
           <div className="op-rtile" style={{ background: '#252a45' }}>🔀</div>
-          <div><b>Distribuidor · {d.slot || 'wa1'}{d.name ? ` · ${d.name}` : ''}</b><small>{gname(d.hub)} <i>→</i> {(d.targets || []).length} grupos</small></div>
+          <div><b>Distribuidor · {d.slot || 'wa1'}{d.name ? ` · ${d.name}` : ''}</b><small>{gname(d.hub)} <i>→</i> {(d.targets || []).length} grupo{((d.targets || []).length === 1) ? '' : 's'}</small></div>
           <span className={`op-tgl${d.pausado ? ' off' : ''}`} />
         </a>
       ))}

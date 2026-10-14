@@ -34,7 +34,7 @@ export default function Relatorios() {
               <div className="card" key={b.slot}>
                 <small className="hint">Nº {b.slot === 'wa2' ? '2' : '1'}</small>
                 <div className="price">{b.clicks}</div>
-                <p className="hint">{b.links} links</p>
+                <p className="hint">{b.links} link{b.links === 1 ? '' : 's'}</p>
               </div>
             ))}
           </div>
