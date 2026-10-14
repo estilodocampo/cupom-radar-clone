@@ -33,3 +33,24 @@ export async function shopeeShortLink(
   if (!link) throw new Error('Shopee: sem shortLink na resposta');
   return link;
 }
+
+export async function shopeeGraphql(
+  creds: { appId: string; secret: string },
+  query: string
+): Promise<{ data?: Record<string, unknown>; errors?: { message?: string }[] }> {
+  const payload = JSON.stringify({ query });
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = createHash('sha256').update(creds.appId + timestamp + payload + creds.secret).digest('hex');
+  const res = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `SHA256 Credential=${creds.appId}, Timestamp=${timestamp}, Signature=${signature}`,
+    },
+    body: payload,
+  });
+  return (await res.json().catch(() => ({}))) as {
+    data?: Record<string, unknown>;
+    errors?: { message?: string }[];
+  };
+}
