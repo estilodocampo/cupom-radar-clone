@@ -39,6 +39,9 @@ export default function Distribuidor() {
   const [hub, setHub] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [extra, setExtra] = useState('');
+  const [chanInput, setChanInput] = useState('');
+  const [chanNames, setChanNames] = useState<Record<string, string>>({});
+  const [chanMsg, setChanMsg] = useState('');
   const [onlyMine, setOnlyMine] = useState(false);
   const [requireLink, setRequireLink] = useState(false);
   const [convert, setConvert] = useState(true);
@@ -77,7 +80,7 @@ export default function Distribuidor() {
   }
 
   function resetForm() {
-    setEditing(null); setName(''); setHub(''); setPicked([]); setExtra('');
+    setEditing(null); setName(''); setHub(''); setPicked([]); setExtra(''); setChanInput(''); setChanMsg('');
     setOnlyMine(false); setRequireLink(false); setConvert(true); setStripCoupons(true);
     setPrefix(''); setSuffix(''); setMinInterval(0); setMaxPerDay(0); setDedupHoras(24); setPausado(false);
   }
@@ -95,6 +98,18 @@ export default function Distribuidor() {
   function toggle(id: string) {
     if (id === hub) return;
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  }
+
+  async function addCanal() {
+    const v = chanInput.trim();
+    if (!v) return;
+    setChanMsg('Buscando canal...');
+    const d = await fetch(`/api/whatsapp/channel?invite=${encodeURIComponent(v)}&slot=${slot}`).then((r) => r.json()).catch(() => null);
+    if (!d?.id?.endsWith('@newsletter')) { setChanMsg(`❌ ${d?.error || 'Canal não encontrado'}`); return; }
+    setPicked((p) => (p.includes(d.id) ? p : [...p, d.id]));
+    if (d.name) setChanNames((m) => ({ ...m, [d.id]: d.name }));
+    setChanInput('');
+    setChanMsg(d.name ? `✅ ${d.name}${d.followers ? ` · ${d.followers} seguidores` : ''}` : '✅ Canal adicionado!');
   }
 
   function targetsAtuais() {
@@ -177,6 +192,18 @@ export default function Distribuidor() {
           </label>
         ))}
         <textarea className="input" rows={2} style={{ marginTop: 8 }} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="JIDs extras (opcional)" />
+        <label className="lbl" style={{ marginTop: 8 }}>📢 Canal (link de convite)</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input className="input" style={{ marginBottom: 0 }} value={chanInput} onChange={(e) => setChanInput(e.target.value)} placeholder="https://whatsapp.com/channel/..." />
+          <button type="button" className="btn btn-ghost btn-sm" style={{ flexShrink: 0 }} onClick={addCanal}>＋</button>
+        </div>
+        {chanMsg && <p className="hint" style={{ marginTop: 4 }}>{chanMsg}</p>}
+        {picked.filter((t) => t.endsWith('@newsletter')).map((t) => (
+          <div className="row" key={t} style={{ marginTop: 6 }}>
+            <div>📢 <b>{chanNames[t] || `${t.slice(0, 14)}…`}</b></div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setPicked((p) => p.filter((x) => x !== t))}>✕</button>
+          </div>
+        ))}
 
         <div className="dash-section">
           <div className="dash-eyebrow">3 · REGRAS</div>

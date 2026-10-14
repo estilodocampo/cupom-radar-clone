@@ -1246,8 +1246,36 @@ const server = http.createServer(async (req, res) => {
     const inUse = new Set(await groupsInUse());
     return sendJson(res, 200, { groups: groups.map((g) => ({ ...g, inUse: inUse.has(g.id) })) });
   }
-  if (url.pathname === '/participants' && req.method === 'GET') {
+  if (url.pathname === '/channel' && req.method === 'GET') {
+    // Resolve link de convite do Canal (https://whatsapp.com/channel/XXXX) -> JID @newsletter
     const cx = conns[slot];
+    const invite = url.searchParams.get('invite') || '';
+    const code = ((invite.match(/channel\/([A-Za-z0-9_-]+)/) || [])[1] || invite.trim()).replace(/[^A-Za-z0-9_-]/g, '');
+    if (!cx.sock || !cx.connected) return sendJson(res, 502, { error: 'whatsapp desconectado' });
+    if (!code) return sendJson(res, 400, { error: 'convite inválido' });
+    try {
+      const meta = await cx.sock.newsletterMetadata('invite', code);
+      const id = meta && meta.id ? String(meta.id) : '';
+      if (!id.endsWith('@newsletter')) return sendJson(res, 404, { error: 'canal não encontrado' });
+      const tm = meta.thread_metadata || {};
+      let followers = null;
+      try {
+        const subs = await cx.sock.newsletterSubscribers(id);
+        const n = subs && (subs.count ?? subs.total ?? subs.subscribers);
+        if (typeof n === 'number') followers = n;
+        else if (Array.isArray(subs)) followers = subs.length;
+      } catch { /* seguidores é opcional */ }
+      return sendJson(res, 200, {
+        id,
+        name: String(meta.name || tm.name || ''),
+        description: String(meta.description || tm.description || '').slice(0, 140),
+        followers,
+      });
+    } catch (e) {
+      return sendJson(res, 502, { error: String(e).slice(0, 200) });
+    }
+  }
+  if (url.pathname === '/participants' && req.method === 'GET') {    const cx = conns[slot];
     const groupJid = url.searchParams.get('groupJid') || '';
     if (!groupJid.endsWith('@g.us')) return sendJson(res, 400, { error: 'groupJid inválido' });
     try {

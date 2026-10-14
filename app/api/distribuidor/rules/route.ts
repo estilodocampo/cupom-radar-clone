@@ -10,6 +10,8 @@ async function currentUser() {
 }
 
 const jidOk = (s: string) => s.endsWith('@g.us');
+// Destinos: grupos + Canais (@newsletter). Hub continua só-grupo.
+const alvoOk = (s: string) => s.endsWith('@g.us') || s.endsWith('@newsletter');
 const slotOk = (s: string) => (s === 'wa2' ? 'wa2' : 'wa1');
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Number.isFinite(n) ? n : lo));
 
@@ -25,9 +27,9 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Login necessário' }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const hub = String(body.hub || '').trim();
-  const targets = [...new Set(((body.targets as string[]) || []).map((t) => String(t).trim()).filter(jidOk))].filter((t) => t !== hub);
+  const targets = [...new Set(((body.targets as string[]) || []).map((t) => String(t).trim()).filter(alvoOk))].filter((t) => t !== hub);
   if (!jidOk(hub)) return NextResponse.json({ error: 'Selecione o grupo hub.' }, { status: 400 });
-  if (!targets.length) return NextResponse.json({ error: 'Selecione ao menos um grupo destino.' }, { status: 400 });
+  if (!targets.length) return NextResponse.json({ error: 'Selecione ao menos um destino.' }, { status: 400 });
   const data = {
     name: String(body.name || '').slice(0, 60),
     slot: slotOk(String(body.slot || 'wa1')),
