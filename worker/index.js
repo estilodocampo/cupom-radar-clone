@@ -80,7 +80,11 @@ function toAffiliateLink(originalUrl, affiliateId, store) {
 }
 
 function toMlAffiliateLink(originalUrl, tag, mattTool) {
-  return mergeTracking(originalUrl, { matt_tool: mattTool || 'afiliados', matt_word: tag });
+  // Forma canônica curta: o ML resolve só pelo ID (slug do título é decorativo).
+  // Ex.: .../MLB-5117843076-fritadeira...-_JM -> .../MLB-5117843076-_JM (~-35% menor).
+  const m = String(originalUrl).match(/\/MLB-?(\d+)/i);
+  const base = m ? `https://produto.mercadolivre.com.br/MLB-${m[1]}-_JM` : originalUrl;
+  return mergeTracking(base, { matt_tool: mattTool || 'afiliados', matt_word: tag });
 }
 
 // Preserva os parâmetros originais e troca SÓ o rastreio (remove o da origem).

@@ -59,8 +59,11 @@ export function toAffiliateLink(originalUrl: string, affiliateId: string, store:
 }
 
 // Mercado Livre: rastreio via matt_tool + matt_word (mesmo do Gerador de links).
+// Forma canônica curta: o ML resolve só pelo ID (slug do título é decorativo).
 export function toMlAffiliateLink(originalUrl: string, tag: string, mattTool?: string): string {
-  return mergeTracking(originalUrl, { matt_tool: mattTool || 'afiliados', matt_word: tag });
+  const m = String(originalUrl).match(/\/MLB-?(\d+)/i);
+  const base = m ? `https://produto.mercadolivre.com.br/MLB-${m[1]}-_JM` : originalUrl;
+  return mergeTracking(base, { matt_tool: mattTool || 'afiliados', matt_word: tag });
 }
 
 const TITLE_STOP = new Set(['com', 'para', 'por', 'uma', 'dos', 'das', 'que', 'nos', 'nas', 'sem', 'the', 'and', 'for', 'link', 'cupom', 'oferta', 'estoque', 'limitado', 'frete', 'gratis', 'imperdivel']);
