@@ -54,6 +54,7 @@ export default function Overview() {
   const [names, setNames] = useState<Record<string, string>>({});
   const first = (session?.user?.name || session?.user?.email || '').split(/[\s@]/)[0] || 'você';
   const [toggling, setToggling] = useState<string | null>(null);
+  const [regrasProntas, setRegrasProntas] = useState(false);
 
   async function toggleRegra(kind: 'cop' | 'dis', id: string) {
     if (toggling) return;
@@ -89,8 +90,10 @@ export default function Overview() {
     function carregar() {
       fetch('/api/stats').then((r) => r.json()).then(setStats).catch(() => setStats({}));
       fetch('/api/whatsapp/status').then((r) => r.json()).then((d) => { setSlots(d?.slots || {}); setHealth(d?.health || {}); }).catch(() => {});
-      fetch('/api/copiador/rules').then((r) => r.json()).then((d) => setCop(d?.items || [])).catch(() => {});
-      fetch('/api/distribuidor/rules').then((r) => r.json()).then((d) => setDis(d?.items || [])).catch(() => {});
+      Promise.all([
+        fetch('/api/copiador/rules').then((r) => r.json()).then((d) => setCop(d?.items || [])).catch(() => {}),
+        fetch('/api/distribuidor/rules').then((r) => r.json()).then((d) => setDis(d?.items || [])).catch(() => {}),
+      ]).finally(() => setRegrasProntas(true));
       fetch('/api/dispatches').then((r) => r.json()).then((d) => {
         const items = ((d?.items || []) as Dispatch[]).filter((o) => (o.status || 'sent') === 'sent');
         // 1 linha por destino: colapsa a mesma oferta (hub + distribuidor) numa só
@@ -126,6 +129,10 @@ export default function Overview() {
   const groupsOf = (slot?: string) => dis.filter((d) => (d.slot || 'wa1') === (slot || 'wa1')).reduce((a, d) => a + (d.targets || []).length, 0);
   const rulesOn = cop.filter((c) => c.active !== false).length + dis.filter((d) => !d.pausado).length;
   const rulesTotal = cop.length + dis.length;
+  // 0 = desconectado · 1 = conectado mas sem regra ligada · 2 = operando
+  const estado = !anyOn ? 0 : (!regrasProntas || rulesOn > 0) ? 2 : 1;
+  const corEstado = ['#ef4444', '#f59e0b', '#34d399'][estado];
+  const txtEstado = ['DESCONECTADO', 'OPERAÇÃO PAUSADA', 'OPERAÇÃO ATIVA'][estado];
 
   return (
     <div className="dash">
@@ -136,8 +143,8 @@ export default function Overview() {
 
       <div className="op-status">
         <div className="op-status-head">
-          <span className="op-pulse" style={anyOn ? undefined : { background: '#ef4444', boxShadow: 'none' }} />
-          {anyOn ? 'OPERAÇÃO ATIVA' : 'OPERAÇÃO PAUSADA'}
+          <span className="op-pulse" style={estado === 2 ? undefined : { background: corEstado, boxShadow: `0 0 8px ${corEstado}` }} />
+          <span style={{ color: corEstado }}>{txtEstado}</span>
           <span>{stats ? `${stats.postsToday ?? 0} criadas hoje` : 'carregando…'}</span>
         </div>
         {(['wa1', 'wa2'] as const).map((s) => {
