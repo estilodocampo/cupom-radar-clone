@@ -12,7 +12,7 @@ export default function Relatorios() {
   const [bySlot, setBySlot] = useState<{ slot: string; clicks: number; links: number }[]>([]);
   const [top, setTop] = useState<LinkStat[]>([]);
   const [rules, setRules] = useState<RuleStat[]>([]);
-  const [shopee, setShopee] = useState<{ configured?: boolean; totals?: { clicks: number; orders: number; commission: number; rows: number }; error?: string } | null>(null);
+  const [shopee, setShopee] = useState<{ configured?: boolean; totals?: { clicks: number; orders: number; commission: number; rows: number }; topProducts?: { name: string; orders: number; commission: number; clicks: number }[]; error?: string } | null>(null);
   useEffect(() => {
     fetch('/api/dispatches').then((r) => r.json()).then((d) => { setLogs(d.items || []); if (d.totals) setTotals(d.totals); }).catch(() => {});
     fetch('/api/links/stats').then((r) => r.json()).then((d) => { setBySlot(d.bySlot || []); setTop(d.top || []); }).catch(() => {});
@@ -70,11 +70,18 @@ export default function Relatorios() {
           : shopee.configured === false ? <Empty icon="🛒" text="Cadastre App ID + Secret no Robô para ver cliques e comissão." actionLabel="Robô" actionHref="/dashboard/robo" />
           : shopee.error ? <p className="hint">⚠️ {shopee.error}</p>
           : (
-            <div className="grid grid-4">
-              <div className="card"><small className="hint">CLIQUES</small><div className="price">{shopee.totals?.clicks ?? 0}</div></div>
-              <div className="card"><small className="hint">PEDIDOS</small><div className="price">{shopee.totals?.orders ?? 0}</div></div>
-              <div className="card"><small className="hint">COMISSÃO EST.</small><div className="price">R$ {(shopee.totals?.commission ?? 0).toFixed(2).replace('.', ',')}</div></div>
-            </div>
+            <>
+              <div className="grid grid-4">
+                <div className="card"><small className="hint">CLIQUES</small><div className="price">{shopee.totals?.clicks ?? 0}</div></div>
+                <div className="card"><small className="hint">PEDIDOS</small><div className="price">{shopee.totals?.orders ?? 0}</div></div>
+                <div className="card"><small className="hint">COMISSÃO EST.</small><div className="price">R$ {(shopee.totals?.commission ?? 0).toFixed(2).replace('.', ',')}</div></div>
+              </div>
+              {(shopee.topProducts || []).length > 0 && (
+                <ul className="list" style={{ marginTop: 10 }}>{(shopee.topProducts || []).map((p, i) => (
+                  <li key={i}><b>{p.name}</b><br /><span className="hint">{p.orders} pedido(s){p.commission > 0 ? ` · R$ ${p.commission.toFixed(2).replace('.', ',')}` : ''}</span></li>
+                ))}</ul>
+              )}
+            </>
           )}
       </div>
       <div className="card" style={{ marginTop: 16 }}>
