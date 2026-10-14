@@ -706,6 +706,46 @@ const BROKEN_AFTER = 3;
 const BROKEN_SKIP_MS = 24 * 3600 * 1000;
 const skipLogAt = new Map(); // kind|slot -> timestamp do último alerta de pulo
 
+// ===== MODO SEGURO: saúde por número (anti-ban) =====
+// Sinais: forbiddens/hora, rajadas de falha, quedas de conexão, ritmo de envio.
+// Score 0-100 por slot; >= 85 pausa os disparos sozinho até o risco diluir.
+const RISCO_PAUSA = 80;
+const slotHealth = {
+  wa1: { forbids: [], fails: [], disconnects: [], sends: [] },
+  wa2: { forbids: [], fails: [], disconnects: [], sends: [] },
+};
+function regEv(slot, key) {
+  const h = slotHealth[normSlot(slot)];
+  if (!h) return;
+  h[key].push(Date.now());
+  // poda: mantém só últimas 24h e no máx. 500 eventos
+  const cut = Date.now() - 24 * 3600 * 1000;
+  h[key] = h[key].filter((t) => t > cut).slice(-500);
+}
+function riscoSlot(slot) {
+  const h = slotHealth[normSlot(slot)] || { forbids: [], fails: [], disconnects: [], sends: [] };
+  const now = Date.now();
+  const inLast = (arr, ms) => arr.filter((t) => now - t < ms).length;
+  const forb1h = inLast(h.forbids, 3600e3);
+  const fails10m = inLast(h.fails, 600e3);
+  const disc6h = inLast(h.disconnects, 6 * 3600e3);
+  const sends10m = inLast(h.sends, 600e3);
+  let score = 0;
+  const motivos = [];
+  if (forb1h > 0) { score += Math.min(60, forb1h * 10); motivos.push(`${forb1h} forbidden/1h`); }
+  if (fails10m >= 5) { score += 15; motivos.push('rajada de falhas'); }
+  if (disc6h > 0) { score += Math.min(30, disc6h * 10); motivos.push(`${disc6h} quedas/6h`); }
+  if (sends10m > 30) { score += 10; motivos.push('ritmo alto'); }
+  score = Math.min(100, Math.round(score));
+  return { score, motivos, paused: score >= RISCO_PAUSA };
+}
+// Intervalo humanizado entre disparos: acelera com risco baixo, freia com risco alto
+function atrasoEnvio(slot) {
+  const { score } = riscoSlot(slot);
+  const [a, b] = score >= 60 ? [12000, 25000] : score >= 30 ? [5000, 12000] : [2000, 5000];
+  return Math.floor(a + Math.random() * (b - a));
+}
+
 function erroPermanente(e) {
   return /forbidden|not-?authorized|unauthorized|not-?in-?group|not-?participant|[^0-9]403[^0-9]/.test(String(e || '').toLowerCase());
 }
@@ -752,6 +792,12 @@ async function carregarAlvosQuebrados() {
 // Retorna { ok, sent: [{jid, id, participant}] } para o mapa de repasses.
 async function enviarLote(c, targets, text, mediaBuf, mediaType, slot, pularIntervalo = false) {
   if (!targets.length) return { ok: false, sent: [] };
+  const sl0 = normSlot(slot);
+  const risco0 = riscoSlot(sl0);
+  if (risco0.paused) {
+    log.warn({ kind: c.kind, slot: sl0, risco: risco0.score, motivos: risco0.motivos.join(', ') }, 'slot em pausa de segurança (modo seguro)');
+    return { ok: false, sent: [] };
+  }
   if (!(await passaLimites(c, pularIntervalo))) {
     log.info({ kind: c.kind }, 'fora da janela: oferta descartada (sem fila)');
     return { ok: false, sent: [] };
@@ -769,6 +815,7 @@ async function enviarLote(c, targets, text, mediaBuf, mediaType, slot, pularInte
     try {
       const key = await sendComMidia(t, text, mediaBuf, mediaType, slot);
       brokenTargets.delete(`${sl}|${t}`);
+      regEv(sl, 'sends');
       await pool.query('UPDATE "QueuedOffer" SET status = $1, "sentAt" = NOW() WHERE "userId" = $2 AND kind = $3 AND fp = $4 AND "targetJid" = $5', ['sent', c.userId, c.kind || 'copiador', ofertaFp(c, text), t]).catch(() => {});
       await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind, "ruleId") VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)', [c.userId, t, text, 'sent', c.kind || 'copiador', c.ruleId || null]).catch(() => {});
       if (key && key.id) sent.push({ jid: t, id: key.id, participant: key.participant || null });
@@ -777,6 +824,8 @@ async function enviarLote(c, targets, text, mediaBuf, mediaType, slot, pularInte
       const msg = String(e).slice(0, 200);
       const perm = erroPermanente(e);
       const fails = marcarFalha(sl, t, perm);
+      regEv(sl, 'fails');
+      if (perm && /forbidden/i.test(msg)) regEv(sl, 'forbids');
       // Prefixo [slot]: permite restaurar os alvos quebrados do banco após restart
       const errDb = `[${sl}] ${msg}`.slice(0, 220);
       await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind, "ruleId", error) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)', [c.userId, t, text, 'failed', c.kind || 'copiador', c.ruleId || null, errDb]).catch(() => {});
@@ -812,7 +861,7 @@ async function sendComMidia(targetJid, text, mediaBuf, mediaType, slot) {
   // linkPreview: null = sem card de preview (o card repetia o título do anúncio)
   else key = (await sock.sendMessage(targetJid, { text, linkPreview: null })).key;
   if (rest && mediaBuf) await sock.sendMessage(targetJid, { text: rest, linkPreview: null });
-  await new Promise((r) => setTimeout(r, 1500));
+  await new Promise((r) => setTimeout(r, atrasoEnvio(slot)));
   return key || null;
 }
 
@@ -1051,6 +1100,7 @@ async function connectSlot(slot) {
     }
     if (connection === 'close') {
       cx.connected = false;
+      regEv(slot, 'disconnects');
       const code = lastDisconnect?.error?.output?.statusCode;
       cx.lastError = `close:${code}`;
       const loggedOut = code === DisconnectReason.loggedOut;
@@ -1066,6 +1116,8 @@ async function connectSlot(slot) {
 async function sendText(to, text, slot) {
   const cx = conns[normSlot(slot)];
   if (!cx.sock || !cx.connected) throw new Error('whatsapp desconectado');
+  const r = riscoSlot(slot);
+  if (r.paused) throw new Error(`slot em pausa de segurança (risco ${r.score})`);
   await cx.sock.sendMessage(to, { text, linkPreview: null });
 }
 
@@ -1181,6 +1233,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, {
       ...slotPayload('wa1'),
       slots: { wa1: slotPayload('wa1'), wa2: slotPayload('wa2') },
+      health: { wa1: riscoSlot('wa1'), wa2: riscoSlot('wa2') },
       copiadores: copiadores.length, distribuidores: distribuidores.length,
     });
   }

@@ -47,6 +47,7 @@ export default function Overview() {
   const { data: session } = useSession();
   const [stats, setStats] = useState<Stats | null>(null);
   const [slots, setSlots] = useState<Record<string, Slot>>({});
+  const [health, setHealth] = useState<Record<string, { score?: number; motivos?: string[]; paused?: boolean }>>({});
   const [cop, setCop] = useState<CopRule[]>([]);
   const [dis, setDis] = useState<DisRule[]>([]);
   const [offers, setOffers] = useState<Dispatch[]>([]);
@@ -56,7 +57,7 @@ export default function Overview() {
   useEffect(() => {
     function carregar() {
       fetch('/api/stats').then((r) => r.json()).then(setStats).catch(() => setStats({}));
-      fetch('/api/whatsapp/status').then((r) => r.json()).then((d) => setSlots(d?.slots || {})).catch(() => {});
+      fetch('/api/whatsapp/status').then((r) => r.json()).then((d) => { setSlots(d?.slots || {}); setHealth(d?.health || {}); }).catch(() => {});
       fetch('/api/copiador/rules').then((r) => r.json()).then((d) => setCop(d?.items || [])).catch(() => {});
       fetch('/api/distribuidor/rules').then((r) => r.json()).then((d) => setDis(d?.items || [])).catch(() => {});
       fetch('/api/dispatches').then((r) => r.json()).then((d) => {
@@ -131,6 +132,26 @@ export default function Overview() {
         <a className="btn btn-primary" href="/dashboard/postagens/produtos">＋ Criar oferta</a>
         <a className="btn btn-ghost" href="/dashboard/postagens/envio" aria-label="Envio automático">⚡</a>
         <a className="btn btn-ghost" href="/dashboard/postagens/fila" aria-label="Fila">📋</a>
+      </div>
+
+      <div className="op-sec">
+        <h3>🛡️ Saúde</h3>
+        <small>modo seguro</small>
+      </div>
+      <div className="op-status">
+        {(['wa1', 'wa2'] as const).map((s) => {
+          const h = health[s] || {};
+          const score = h.score ?? 0;
+          const cor = h.paused || score >= 60 ? '#ef4444' : score >= 30 ? '#f59e0b' : '#34d399';
+          return (
+            <div className="op-num" key={s}>
+              <span className="d" style={{ background: cor, boxShadow: `0 0 8px ${cor}` }} />
+              <b>{s}</b>
+              <code>{score}/100</code>
+              <em>{h.paused ? 'em pausa' : (h.motivos || []).join(' · ') || 'tudo calmo'}</em>
+            </div>
+          );
+        })}
       </div>
 
       <div className="op-sec">
