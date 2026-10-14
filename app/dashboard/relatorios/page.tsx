@@ -12,12 +12,10 @@ export default function Relatorios() {
   const [bySlot, setBySlot] = useState<{ slot: string; clicks: number; links: number }[]>([]);
   const [top, setTop] = useState<LinkStat[]>([]);
   const [rules, setRules] = useState<RuleStat[]>([]);
-  const [shopee, setShopee] = useState<{ configured?: boolean; totals?: { clicks: number; orders: number; commission: number; rows: number }; topProducts?: { name: string; orders: number; commission: number; clicks: number }[]; error?: string } | null>(null);
   useEffect(() => {
     fetch('/api/dispatches').then((r) => r.json()).then((d) => { setLogs(d.items || []); if (d.totals) setTotals(d.totals); }).catch(() => {});
     fetch('/api/links/stats').then((r) => r.json()).then((d) => { setBySlot(d.bySlot || []); setTop(d.top || []); }).catch(() => {});
     fetch('/api/rules/stats').then((r) => r.json()).then((d) => setRules(d.items || [])).catch(() => {});
-    fetch('/api/shopee/report').then((r) => r.json()).then(setShopee).catch(() => setShopee({ error: 'Falha ao consultar' }));
   }, []);
   const sent = totals ? totals.sent : logs.filter((l) => l.status === 'sent').length;
   const failed = totals ? totals.failed : logs.filter((l) => l.status !== 'sent').length;
@@ -63,36 +61,6 @@ export default function Relatorios() {
             </li>
           ))}</ul>
         )}
-      </div>
-      <div className="card" style={{ marginTop: 16 }}>
-        <h3>🛒 Shopee (API)</h3>
-        {shopee == null ? <p className="hint">Consultando a Shopee...</p>
-          : shopee.configured === false ? <Empty icon="🛒" text="Cadastre App ID + Secret no Robô para ver cliques e comissão." actionLabel="Robô" actionHref="/dashboard/robo" />
-          : shopee.error ? <p className="hint">⚠️ {shopee.error}</p>
-          : (
-            <>
-              <div className="grid grid-4">
-                <div className="card"><small className="hint">CLIQUES</small><div className="price">{shopee.totals?.clicks ?? 0}</div></div>
-                <div className="card"><small className="hint">PEDIDOS</small><div className="price">{shopee.totals?.orders ?? 0}</div></div>
-                <div className="card"><small className="hint">COMISSÃO EST.</small><div className="price">R$ {(shopee.totals?.commission ?? 0).toFixed(2).replace('.', ',')}</div></div>
-              </div>
-              {(shopee.topProducts || []).length > 0 && (
-                <ul className="list" style={{ marginTop: 10 }}>{(shopee.topProducts || []).map((p, i) => (
-                  <li key={i}><b>{p.name}</b><br /><span className="hint">{p.orders} pedido(s){p.commission > 0 ? ` · R$ ${p.commission.toFixed(2).replace('.', ',')}` : ''}</span></li>
-                ))}</ul>
-              )}
-            </>
-          )}
-      </div>
-      <div className="card" style={{ marginTop: 16 }}>
-        <h3>🏬 Outras lojas</h3>
-        <p className="hint">Sem API pública — acompanhe no painel de cada loja:</p>
-        <ul className="list">
-          <li><b>🟦 Mercado Livre</b> — <a href="https://www.mercadolivre.com.br/afiliados/" target="_blank" rel="noreferrer">Abrir painel ↗</a></li>
-          <li><b>🟧 Amazon</b> — <a href="https://associados.amazon.com.br/" target="_blank" rel="noreferrer">Abrir painel ↗</a></li>
-          <li><b>🟥 Magalu / SHEIN</b> — <span className="hint">painel da loja</span></li>
-        </ul>
-        <p className="hint">Os cliques dos seus /r/ continuam acima em Cliques e Top links.</p>
       </div>
     </>
   );

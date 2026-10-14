@@ -8,6 +8,7 @@ interface Group { label: string; icon: string; items: Item[] }
 
 const TOP: Item[] = [
   { href: '/dashboard', label: '🏠 Início' },
+  { href: '/dashboard/saldo', label: '💰 Saldo' },
   { href: '/dashboard/robo', label: '🤖 Robô' },
   { href: '/dashboard/planos', label: '💎 Planos' },
   { href: '/dashboard/relatorios', label: '📊 Relatórios' },
@@ -41,12 +42,12 @@ const LABELS: [string, string][] = [
   ['/dashboard/robo', 'Robô'],
   ['/dashboard/planos', 'Planos'],
   ['/dashboard/relatorios', 'Relatórios'],
+  ['/dashboard/saldo', 'Saldo'],
   ['/dashboard/config/dados', 'Seus Dados'],
   ['/dashboard/config/ajuda', 'Ajuda'],
   ['/dashboard/config/feedback', 'Feedback'],
   ['/dashboard', 'Início'],
 ];
-
 const TABS: { href: string; label: string; icon: string }[] = [
   { href: '/dashboard', label: 'Início', icon: '🏠' },
   { href: '/dashboard/postagens/produtos', label: 'Criar', icon: '✏️' },
