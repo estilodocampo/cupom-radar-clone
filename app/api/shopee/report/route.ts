@@ -20,7 +20,19 @@ export async function GET() {
     return NextResponse.json({ configured: false });
   }
 
-  const query = 'query { conversionReport { edges { node { id clicks orders estimatedCommission } } } }';
+  // Introspecção: descobre args e campos reais (log no servidor, 1x por abertura)
+  try {
+    const t = await shopeeGraphql({ appId: cfg.appId, secret: cfg.secret }, 'query { __type(name: "ConversionReportConnection") { fields { name } } }');
+    console.info('[shopee-report] tipo:', JSON.stringify(t).slice(0, 1200));
+    const q = await shopeeGraphql({ appId: cfg.appId, secret: cfg.secret }, 'query { __type(name: "Query") { fields { name args { name } } } }');
+    const fields = (((q.data || {}) as Record<string, unknown>).__type || {}) as { fields?: { name: string; args?: { name: string }[] }[] };
+    const rel = (fields.fields || []).filter((f) => /conversion|report|valid/i.test(f.name || ''));
+    console.info('[shopee-report] queries:', JSON.stringify(rel).slice(0, 1200));
+  } catch (e) {
+    console.warn('[shopee-report] introspecção falhou:', String(e).slice(0, 150));
+  }
+
+  const query = 'query { conversionReport { nodes { id clicks orders estimatedCommission } } }';
   let out: { data?: Record<string, unknown>; errors?: { message?: string }[] };
   try {
     out = await shopeeGraphql({ appId: cfg.appId, secret: cfg.secret }, query);
@@ -32,15 +44,15 @@ export async function GET() {
     return NextResponse.json({ configured: true, error: out.errors[0]?.message || 'Shopee: erro no relatório' });
   }
 
-  const report = (out.data?.conversionReport || {}) as { edges?: { node?: Record<string, unknown> }[] };
-  const edges = report.edges || [];
+  const report = (out.data?.conversionReport || {}) as { edges?: { node?: Record<string, unknown> }[]; nodes?: Record<string, unknown>[] };
+  const nodes = report.nodes || (report.edges || []).map((e) => e?.node || {});
   // Log da amostra crua (truncada) para calibrar os campos exatos do relatório
-  if (edges[0]?.node) {
-    console.info('[shopee-report] amostra:', JSON.stringify(edges[0].node).slice(0, 1500));
+  if (nodes[0]) {
+    console.info('[shopee-report] amostra:', JSON.stringify(nodes[0]).slice(0, 1500));
   }
   let clicks = 0, orders = 0, commission = 0;
-  for (const e of edges) {
-    const n = (e?.node || {}) as Record<string, unknown>;
+  for (const n0 of nodes) {
+    const n = (n0 || {}) as Record<string, unknown>;
     const num = (v: unknown) => (typeof v === 'number' ? v : Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0);
     clicks += num(n.clicks ?? n.clickCount);
     orders += num(n.orders ?? n.orderCount);
@@ -48,6 +60,6 @@ export async function GET() {
   }
   return NextResponse.json({
     configured: true,
-    totals: { clicks, orders, commission: Math.round(commission * 100) / 100, rows: edges.length },
+    totals: { clicks, orders, commission: Math.round(commission * 100) / 100, rows: nodes.length },
   });
 }
