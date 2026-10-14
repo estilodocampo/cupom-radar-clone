@@ -18,22 +18,24 @@ export async function GET() {
   if (!session?.user?.email) return NextResponse.json({ error: 'Login necessário' }, { status: 401 });
   const user = await prisma.user.findUnique({ where: { email: session.user.email } }).catch(() => null);
   if (!user) return NextResponse.json({ error: 'Login necessário' }, { status: 401 });
-  const bySlot = await prisma.shortLink.groupBy({
-    by: ['slot'],
-    where: { userId: user.id },
-    _sum: { clicks: true },
-    _count: { _all: true },
-  }).catch(() => []);
-  const top = await prisma.shortLink.findMany({
-    where: { userId: user.id },
-    orderBy: { clicks: 'desc' },
-    take: 10,
-    select: { code: true, clicks: true, slot: true, url: true, createdAt: true },
-  }).catch(() => []);
-  const all = await prisma.shortLink.findMany({
-    where: { userId: user.id },
-    select: { url: true, clicks: true },
-  }).catch(() => [] as { url: string; clicks: number }[]);
+  const [bySlot, top, all] = await Promise.all([
+    prisma.shortLink.groupBy({
+      by: ['slot'],
+      where: { userId: user.id },
+      _sum: { clicks: true },
+      _count: { _all: true },
+    }).catch(() => []),
+    prisma.shortLink.findMany({
+      where: { userId: user.id },
+      orderBy: { clicks: 'desc' },
+      take: 10,
+      select: { code: true, clicks: true, slot: true, url: true, createdAt: true },
+    }).catch(() => []),
+    prisma.shortLink.findMany({
+      where: { userId: user.id },
+      select: { url: true, clicks: true },
+    }).catch(() => [] as { url: string; clicks: number }[]),
+  ]);
   const agg: Record<string, { links: number; clicks: number }> = {};
   for (const l of all) {
     const s = storeOf(l.url);

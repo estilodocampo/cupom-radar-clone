@@ -26,7 +26,7 @@ export type WaStatus = {
 export const worker = {
   status: () => call('/status') as Promise<WaStatus>,
   qr: (slot: WaSlot = 'wa1') => call(`/qr?slot=${slot}`),
-  groups: (slot: WaSlot = 'wa1') => call(`/groups?slot=${slot}`) as Promise<{ groups: { id: string; name: string }[] }>,
+  groups: (slot: WaSlot = 'wa1', refresh = false) => call(`/groups?slot=${slot}${refresh ? '&refresh=1' : ''}`) as Promise<{ groups: { id: string; name: string }[] }>,
   participants: (groupJid: string, slot: WaSlot = 'wa1') =>
     call(`/participants?groupJid=${encodeURIComponent(groupJid)}&slot=${slot}`) as Promise<{ participants: { id: string; admin: string | null }[] }>,
   send: (to: string, text: string, slot: WaSlot = 'wa1') =>

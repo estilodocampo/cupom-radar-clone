@@ -6,6 +6,9 @@ import { worker, normSlot } from '../../../../lib/worker';
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ error: 'Login necessário' }, { status: 401 });
-  const data = await worker.groups(normSlot(req.nextUrl.searchParams.get('slot'))).catch((e: Error) => ({ groups: [], error: e.message }));
+  const data = await worker.groups(
+    normSlot(req.nextUrl.searchParams.get('slot')),
+    req.nextUrl.searchParams.get('refresh') === '1'
+  ).catch((e: Error) => ({ groups: [], error: e.message }));
   return NextResponse.json(data);
 }

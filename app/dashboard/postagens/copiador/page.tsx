@@ -19,15 +19,17 @@ export default function Copiador() {
   const [active, setActive] = useState(true);
   const [msg, setMsg] = useState('');
 
-  async function loadGroups(sl: 'wa1' | 'wa2') {
-    const g = await fetch(`/api/whatsapp/groups?slot=${sl}`).then((r) => r.json()).catch(() => null);
+  async function loadGroups(sl: 'wa1' | 'wa2', force = false) {
+    const g = await fetch(`/api/whatsapp/groups?slot=${sl}${force ? '&refresh=1' : ''}`).then((r) => r.json()).catch(() => null);
     setGroups((g?.groups || []) as Group[]);
   }
 
   async function load() {
-    const d = await fetch('/api/copiador/rules').then((r) => r.json()).catch(() => null);
+    const [d, s] = await Promise.all([
+      fetch('/api/copiador/rules').then((r) => r.json()).catch(() => null),
+      fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null),
+    ]);
     setRules((d?.items || []) as Rule[]);
-    const s = await fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null);
     const slots = s?.slots || {};
     const ph: Record<string, string | undefined> = {};
     for (const k of ['wa1', 'wa2']) if (slots[k]?.phone) ph[k] = slots[k].phone;
@@ -98,7 +100,7 @@ export default function Copiador() {
           <option value="">Selecione...</option>
           {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => loadGroups(slot)}>↻ Grupos</button>
+        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => loadGroups(slot, true)}>↻ Grupos</button>
         <input className="input" style={{ marginTop: 8 }} value={hub} onChange={(e) => setHub(e.target.value)} placeholder="Ou cole o JID" />
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
           <input type="checkbox" checked={keepCoupons} onChange={(e) => setKeepCoupons(e.target.checked)} /> Manter cupons

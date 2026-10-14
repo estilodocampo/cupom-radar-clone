@@ -51,15 +51,17 @@ export default function Distribuidor() {
   const [pausado, setPausado] = useState(false);
   const [msg, setMsg] = useState('');
 
-  async function loadGroups(sl: 'wa1' | 'wa2') {
-    const g = await fetch(`/api/whatsapp/groups?slot=${sl}`).then((r) => r.json()).catch(() => null);
+  async function loadGroups(sl: 'wa1' | 'wa2', force = false) {
+    const g = await fetch(`/api/whatsapp/groups?slot=${sl}${force ? '&refresh=1' : ''}`).then((r) => r.json()).catch(() => null);
     setGroups((g?.groups || []) as Group[]);
   }
 
   async function load() {
-    const d = await fetch('/api/distribuidor/rules').then((r) => r.json()).catch(() => null);
+    const [d, s] = await Promise.all([
+      fetch('/api/distribuidor/rules').then((r) => r.json()).catch(() => null),
+      fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null),
+    ]);
     setRules((d?.items || []) as Rule[]);
-    const s = await fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null);
     const slots = s?.slots || {};
     const ph: Record<string, string | undefined> = {};
     for (const k of ['wa1', 'wa2']) if (slots[k]?.phone) ph[k] = slots[k].phone;
@@ -163,7 +165,7 @@ export default function Distribuidor() {
           <option value="">Selecione...</option>
           {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => loadGroups(slot)}>↻ Grupos</button>
+        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => loadGroups(slot, true)}>↻ Grupos</button>
 
         <div className="dash-section">
           <div className="dash-eyebrow">2 · DESTINOS</div>

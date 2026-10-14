@@ -441,9 +441,18 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
   let destino = null; // página do produto (para buscar a foto quando vier só texto)
   const urls = [...new Set(text.match(/https?:\/\/[^\s)]+/g) || [])];
   let out = text;
+  // Expande links curtos em paralelo (1 oferta com 3 links: ~1.5s em vez de ~4.5s)
+  const expanded = new Map();
+  await Promise.all(urls.map(async (raw) => {
+    const clean = raw.replace(/[.,!?]+$/, '');
+    try {
+      expanded.set(raw, await expandUrl(clean));
+    } catch {
+      expanded.set(raw, clean);
+    }
+  }));
   for (let raw of urls) {
-    let url = raw.replace(/[.,!?]+$/, '');
-    url = await expandUrl(url).catch(() => url);
+    let url = expanded.get(raw) || raw.replace(/[.,!?]+$/, '');
     const store = detectStore(url);
     // Guarda a página do produto para buscar a foto (independe de ter afiliado p/ converter)
     if (!destino && store !== 'unknown') {
@@ -1086,15 +1095,25 @@ function canSendTo(sock, g) {
   });
 }
 
-async function listGroups(slot) {
-  const cx = conns[normSlot(slot)];
-  if (!cx.sock || !cx.connected) return [];
+const groupsCache = new Map(); // slot -> { at, data } (evita refetch de 166+ grupos a cada abertura)
+const GROUPS_TTL = 45000;
+
+async function listGroups(slot, force = false) {
+  const sl = normSlot(slot);
+  const hit = groupsCache.get(sl);
+  if (!force && hit && Date.now() - hit.at < GROUPS_TTL) return hit.data;
+  const cx = conns[sl];
+  // Desconectado momentâneo: serve o cache em vez de lista vazia
+  if (!cx.sock || !cx.connected) return hit ? hit.data : [];
   const chats = await cx.sock.groupFetchAllParticipating().catch(() => ({}));
-  return Object.values(chats).map((g) => {
+  const data = Object.values(chats).map((g) => {
     const total = g.participants ? g.participants.length : null;
     const admins = g.participants ? g.participants.filter((p) => p.admin).length : null;
     return { id: g.id, name: g.subject, total, admins, canSend: canSendTo(cx.sock, g) };
   });
+  groupsCache.set(sl, { at: Date.now(), data });
+  if (groupsCache.size > 10) groupsCache.clear();
+  return data;
 }
 
 // Grupos já configurados pelo usuário (para destacar na UI)
@@ -1170,7 +1189,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, { connected: cx.connected, qr: cx.qrDataUrl, updatedAt: cx.qrUpdatedAt });
   }
   if (url.pathname === '/groups' && req.method === 'GET') {
-    const groups = await listGroups(slot).catch(() => []);
+    const groups = await listGroups(slot, url.searchParams.get('refresh') === '1').catch(() => []);
     const inUse = new Set(await groupsInUse());
     return sendJson(res, 200, { groups: groups.map((g) => ({ ...g, inUse: inUse.has(g.id) })) });
   }

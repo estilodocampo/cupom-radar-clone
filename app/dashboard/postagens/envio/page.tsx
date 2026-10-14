@@ -14,14 +14,16 @@ export default function Envio() {
   const [autoNovo, setAutoNovo] = useState(true);
   const [msg, setMsg] = useState('');
 
-  async function loadGroups(sl: Slot) {
-    const s = await fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null);
+  async function loadGroups(sl: Slot, force = false) {
+    const [s, g] = await Promise.all([
+      fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null),
+      fetch(`/api/whatsapp/groups?slot=${sl}${force ? '&refresh=1' : ''}`).then((r) => r.json()).catch(() => null),
+    ]);
     const slots = s?.slots || {};
     setConnected(Boolean(slots[sl]?.connected ?? s?.connected));
     const ph: Record<string, string | undefined> = {};
     for (const k of ['wa1', 'wa2']) if (slots[k]?.phone) ph[k] = slots[k].phone;
     setPhones(ph);
-    const g = await fetch(`/api/whatsapp/groups?slot=${sl}`).then((r) => r.json()).catch(() => null);
     const list = g?.groups || [];
     setGroups(list);
     setGroupJid((prev) => (list.some((x: Group) => x.id === prev) ? prev : ''));
@@ -132,7 +134,7 @@ export default function Envio() {
         <div className="btn-row">
           <button className="btn btn-primary btn-sm" onClick={save}>Salvar</button>
           <button className="btn btn-test btn-sm" onClick={sendTest}>Teste</button>
-          <button className="btn btn-test btn-sm" onClick={() => loadGroups(slot)}>↻ Grupos</button>
+          <button className="btn btn-test btn-sm" onClick={() => loadGroups(slot, true)}>↻ Grupos</button>
           <button className="btn btn-danger btn-sm" onClick={unlink}>Desvincular</button>
         </div>
         {msg && <p>{msg}</p>}
