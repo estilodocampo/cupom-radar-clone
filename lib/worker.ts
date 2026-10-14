@@ -35,8 +35,8 @@ export const worker = {
       : `invite=${encodeURIComponent(params.invite || '')}`;
     return call(`/channel?${q}&slot=${slot}`) as Promise<{ id?: string; name?: string; description?: string; followers?: number | null; error?: string }>;
   },
-  send: (to: string, text: string, slot: WaSlot = 'wa1') =>
-    call('/send', { method: 'POST', body: JSON.stringify({ to, text, slot }) }),
+  send: (to: string, text: string, slot: WaSlot = 'wa1', userId?: string) =>
+    call('/send', { method: 'POST', body: JSON.stringify({ to, text, slot, userId: userId || undefined }) }),
   logout: (slot: WaSlot = 'wa1') =>
     call('/logout', { method: 'POST', body: JSON.stringify({ slot }) }),
 };

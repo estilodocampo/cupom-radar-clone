@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Destino ou texto inválido' }, { status: 400 });
   }
   try {
-    await worker.send(to, text, slot);
+    await worker.send(to, text, slot, user.id);
   } catch (e) {
     return NextResponse.json({ error: String(e).slice(0, 300) }, { status: 502 });
   }

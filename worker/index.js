@@ -113,8 +113,9 @@ function normWords(s) {
 // Linhas candidatas a título do produto dentro do texto da oferta
 function titleHints(text) {
   return (text || '').split('\n')
-    .map((l) => l.replace(/^[^a-zA-Z0-9\u00C0-\u024F]+/, '').trim())
-    .filter((l) => l.length >= 12 && !/https?:\/\//.test(l) && !/^(por|cupom|link|de:|r\$|preço|preco|estoque)/i.test(l))
+    // Remove links inline primeiro: o título geralmente divide a linha com a URL
+    .map((l) => l.replace(/https?:\/\/[^\s)]+/g, ' ').replace(/^[^a-zA-Z0-9\u00C0-\u024F]+/, '').replace(/\s+/g, ' ').trim())
+    .filter((l) => l.length >= 12 && !/^(por|cupom|link|de:|r\$|preço|preco|estoque)/i.test(l))
     .sort((a, b) => b.length - a.length)
     .slice(0, 3);
 }
@@ -482,7 +483,12 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
             log.info('vitrine ML resolvida via busca');
           } else log.warn({ url: url.slice(0, 120) }, 'vitrine ML sem produto correspondente; mantendo vitrine com rastreio');
         }
-        final = toMlAffiliateLink(base, affIds[store], mlMattTool);
+        // Vitrine sem produto: limpa o lixo de rastreio da origem (ref= gigante)
+        // e mantém só base + matt_* — a página abre igual, sem poluir a mensagem
+        const baseLimpa = /\/social\//.test(base) && !isProductPage(base)
+          ? base.split('?')[0].split('#')[0]
+          : base;
+        final = toMlAffiliateLink(baseLimpa, affIds[store], mlMattTool);
         converted++;
         if (!destino && isProductPage(base)) destino = base;
       } else if (store !== 'unknown' && store !== 'mercadolivre' && affIds[store]) {
@@ -505,6 +511,7 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
 }
 
 const linkPrefs = {}; // userId -> true = link direto do afiliado (sem /r/)
+let credsPorUsuario = {}; // userId -> { affIds, shopeeCreds, mlMattTool } (p/ enriquecer envio manual)
 
 async function loadCopiadores() {
   if (!pool) return;
@@ -522,6 +529,7 @@ async function loadCopiadores() {
       }
       else if (r.provider && r.config && r.config.affiliateId) byUser[r.userId].affIds[r.provider] = r.config.affiliateId;
     }
+    credsPorUsuario = byUser;
     // Regras de distribuição (várias por número)
     const dist = await pool.query('SELECT id,"userId",name,slot,hub,targets,"onlyMine","requireLink",convert,"stripCoupons",prefix,suffix,"minInterval","maxPerDay","dedupHoras",pausado FROM "DistribuidorRule"').catch(() => ({ rows: [] }));
     distribuidores = dist.rows
@@ -784,6 +792,30 @@ async function carregarAlvosQuebrados() {
     if (marcados) log.info({ marcados }, 'alvos quebrados restaurados do banco');
   } catch (e) {
     log.warn({ e: String(e).slice(0, 120) }, 'restauração de alvos quebrados falhou');
+  }
+}
+
+// Prepara envio manual/teste/agendado como o automático: converte links
+// (com as credenciais do usuário, sem mexer em cupons do texto) e anexa a foto.
+// Nunca quebra o envio: qualquer falha volta texto original sem mídia.
+async function prepararManual(text, userId, slot, timeoutMs = 6000) {
+  try {
+    const v = (credsPorUsuario || {})[userId] || { affIds: {} };
+    const sl = normSlot(slot);
+    const { out, destino } = await convertTextLinks(text, v.affIds || {}, v.shopeeCreds || null, v.mlMattTool || null, userId, false, sl);
+    const hints = titleHints(out);
+    let media = null;
+    if (destino) {
+      const img = await buscarImagemProduto(destino, hints, timeoutMs).catch(() => null);
+      if (img) media = img;
+    } else {
+      const img = await buscarImagemPorTitulo(hints, timeoutMs).catch(() => null);
+      if (img) media = img;
+    }
+    if (media) log.info({ slot: sl }, 'foto anexada no envio manual');
+    return { text: out, media, mediaType: media ? 'image' : null };
+  } catch {
+    return { text, media: null, mediaType: null };
   }
 }
 
@@ -1113,12 +1145,18 @@ async function connectSlot(slot) {
   });
 }
 
-async function sendText(to, text, slot) {
+function exigePronto(slot) {
   const cx = conns[normSlot(slot)];
-  if (!cx.sock || !cx.connected) throw new Error('whatsapp desconectado');
+  if (!cx.sock || !cx.connected) return 'whatsapp desconectado';
   const r = riscoSlot(slot);
-  if (r.paused) throw new Error(`slot em pausa de segurança (risco ${r.score})`);
-  await cx.sock.sendMessage(to, { text, linkPreview: null });
+  if (r.paused) return `slot em pausa de segurança (risco ${r.score})`;
+  return null;
+}
+
+async function sendText(to, text, slot) {
+  const err = exigePronto(slot);
+  if (err) throw new Error(err);
+  await conns[normSlot(slot)].sock.sendMessage(to, { text, linkPreview: null });
 }
 
 // Indica em quais grupos o usuário pode enviar: é admin (ou não éRestrito)
@@ -1201,7 +1239,10 @@ async function tick() {
     });
   for (const r of rows) {
     try {
-      await sendText(r.groupJid, r.message, 'wa1');
+      const pronto = exigePronto('wa1');
+      if (pronto) throw new Error(pronto);
+      const p = await prepararManual(r.message, r.userId, 'wa1', 10000);
+      await sendComMidia(r.groupJid, p.text, p.media, p.mediaType, 'wa1');
       await pool.query('UPDATE "ScheduledPost" SET status = $1 WHERE id = $2', ['sent', r.id]);
       await pool.query('INSERT INTO "DispatchLog" (id, "userId", "groupJid", message, status, kind) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)', [r.userId, r.groupJid, r.message, 'sent', 'agendado']);
     } catch (e) {
@@ -1297,7 +1338,16 @@ const server = http.createServer(async (req, res) => {
     const body = JSON.parse((await readBody(req)) || '{}');
     if (!body.to || !body.text) return sendJson(res, 400, { error: 'to e text obrigatórios' });
     try {
-      await sendText(body.to, body.text, normSlot(body.slot));
+      const sl = normSlot(body.slot);
+      const pronto = exigePronto(sl);
+      if (pronto) return sendJson(res, 502, { error: pronto });
+      if (body.userId) {
+        // Manual com o pipeline completo: converte + foto (cai p/ texto puro se falhar)
+        const p = await prepararManual(String(body.text), String(body.userId), sl);
+        await sendComMidia(body.to, p.text, p.media, p.mediaType, sl);
+      } else {
+        await sendText(body.to, body.text, sl);
+      }
       return sendJson(res, 200, { ok: true });
     } catch (e) {
       return sendJson(res, 502, { error: String(e).slice(0, 300) });
