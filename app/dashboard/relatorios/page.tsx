@@ -8,23 +8,24 @@ interface RuleStat { id: string; name: string; kind: string; slot: string; activ
 
 export default function Relatorios() {
   const [logs, setLogs] = useState<Disp[]>([]);
+  const [totals, setTotals] = useState<{ sent: number; failed: number } | null>(null);
   const [bySlot, setBySlot] = useState<{ slot: string; clicks: number; links: number }[]>([]);
   const [top, setTop] = useState<LinkStat[]>([]);
   const [rules, setRules] = useState<RuleStat[]>([]);
   useEffect(() => {
-    fetch('/api/dispatches').then((r) => r.json()).then((d) => setLogs(d.items || [])).catch(() => {});
+    fetch('/api/dispatches').then((r) => r.json()).then((d) => { setLogs(d.items || []); if (d.totals) setTotals(d.totals); }).catch(() => {});
     fetch('/api/links/stats').then((r) => r.json()).then((d) => { setBySlot(d.bySlot || []); setTop(d.top || []); }).catch(() => {});
     fetch('/api/rules/stats').then((r) => r.json()).then((d) => setRules(d.items || [])).catch(() => {});
   }, []);
-  const sent = logs.filter((l) => l.status === 'sent').length;
-  const failed = logs.filter((l) => l.status !== 'sent').length;
+  const sent = totals ? totals.sent : logs.filter((l) => l.status === 'sent').length;
+  const failed = totals ? totals.failed : logs.filter((l) => l.status !== 'sent').length;
   return (
     <>
       <h1 className="h1">Relatórios</h1>
       <div className="grid grid-3">
-        <div className="card"><small className="hint">ENVIADOS</small><div className="price">{sent}</div></div>
-        <div className="card"><small className="hint">FALHAS</small><div className="price">{failed}</div></div>
-        <div className="card"><small className="hint">TOTAL</small><div className="price">{logs.length}</div></div>
+        <div className="card"><small className="hint">ENVIADOS (TOTAL)</small><div className="price">{sent}</div></div>
+        <div className="card"><small className="hint">FALHAS (TOTAL)</small><div className="price">{failed}</div></div>
+        <div className="card"><small className="hint">DISPAROS (TOTAL)</small><div className="price">{sent + failed}</div></div>
       </div>
       <div className="card" style={{ marginTop: 16 }}>
         <h3>📱 Cliques</h3>
@@ -62,7 +63,7 @@ export default function Relatorios() {
         )}
       </div>
       <div className="card" style={{ marginTop: 16 }}>
-        <h3>Disparos</h3>
+        <h3>Recentes</h3>
         {logs.length === 0 ? <Empty icon="📤" text="Os disparos aparecem aqui." actionLabel="Envio" actionHref="/dashboard/postagens/envio" /> : (
           <ul className="list">{logs.map((l) => <li key={l.id}><b>{new Date(l.sentAt).toLocaleString()}</b> — {l.groupJid} — <span className={`badge ${l.status === 'sent' ? 'badge-ok' : 'badge-err'}`}>{l.status}</span></li>)}</ul>
         )}
