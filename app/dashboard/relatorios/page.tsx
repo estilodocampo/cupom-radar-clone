@@ -85,10 +85,14 @@ export default function Relatorios() {
           )}
       </div>
       <div className="card" style={{ marginTop: 16 }}>
-        <h3>Recentes</h3>
-        {logs.length === 0 ? <Empty icon="📤" text="Os disparos aparecem aqui." actionLabel="Envio" actionHref="/dashboard/postagens/envio" /> : (
-          <ul className="list">{logs.map((l) => <li key={l.id}><b>{new Date(l.sentAt).toLocaleString()}</b> — {l.groupJid} — <span className={`badge ${l.status === 'sent' ? 'badge-ok' : 'badge-err'}`}>{l.status}</span></li>)}</ul>
-        )}
+        <h3>🏬 Outras lojas</h3>
+        <p className="hint">Sem API pública — acompanhe no painel de cada loja:</p>
+        <ul className="list">
+          <li><b>🟦 Mercado Livre</b> — <a href="https://www.mercadolivre.com.br/afiliados/" target="_blank" rel="noreferrer">Abrir painel ↗</a></li>
+          <li><b>🟧 Amazon</b> — <a href="https://associados.amazon.com.br/" target="_blank" rel="noreferrer">Abrir painel ↗</a></li>
+          <li><b>🟥 Magalu / SHEIN</b> — <span className="hint">painel da loja</span></li>
+        </ul>
+        <p className="hint">Os cliques dos seus /r/ continuam acima em Cliques e Top links.</p>
       </div>
     </>
   );
