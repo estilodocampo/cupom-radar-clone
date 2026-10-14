@@ -30,6 +30,7 @@ export default function Robo() {
   const [mlMatt, setMlMatt] = useState('');
   const [shAppId, setShAppId] = useState('');
   const [shSecret, setShSecret] = useState('');
+  const [linkDireto, setLinkDireto] = useState(false);
 
   async function load() {
     const s = await fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null);
@@ -54,6 +55,7 @@ export default function Robo() {
       if (it.provider === 'mercadolivre') { setMlMatt((it.config?.mattTool as string) || ''); map[it.provider] = (it.config?.affiliateId as string) || ''; }
       else if (it.provider === 'mercadolivre_oauth') setMlOk(true);
       else if (it.provider === 'shopee_api') { setShAppId((it.config?.appId as string) || ''); setShSecret((it.config?.secret as string) || ''); }
+      else if (it.provider === 'link_prefs') setLinkDireto(!!(it.config as { rawLink?: boolean } | null)?.rawLink);
       else if (it.provider === 'templates') { const m = (it.config || {}) as Record<string, string>; setTplMap(m); setTplText((prev) => prev || m[tplStore] || ''); }
       else if (it.provider === 'cupons') { const m = (it.config || {}) as Record<string, string>; setCpMap(m); setCpText((prev) => prev || m[cpStore] || ''); }
       else if (it.provider === 'ganchos') setHooks(((it.config?.items as string[]) || []).join('\n'));
@@ -128,6 +130,17 @@ export default function Robo() {
               <div className="chan-foot"><button onClick={() => setModal({ type: 'store', store: s.id })}>{forms[s.id] ? 'Configurado ✓' : 'Configurar'}</button><span>↗</span></div>
             </div>
           ))}
+          <div className="chan">
+            <div className="chan-top"><span className="chan-ico" style={{ background: '#22331a' }}>🔗</span> Links</div>
+            <h3>Direto do afiliado</h3>
+            <p>Sem /r/: sem contagem de cliques. Vale nas próximas ofertas.</p>
+            <div className="chan-foot">
+              <button className="switch" aria-checked={linkDireto} onClick={async () => { const v = !linkDireto; setLinkDireto(v); await save('link_prefs', { rawLink: v }); }}>
+                <span className="track" />
+                <span>{linkDireto ? 'Ligado' : 'Desligado'}</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -449,7 +449,8 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
     let final = null;
     try {
       if (store === 'shopee' && shopeeCreds) {
-        final = await shopeeShortLink(url.split('?')[0], ['cupomradar'], shopeeCreds);
+        // subId por número: mantém atribuição wa1/wa2 dentro do painel Shopee
+        final = await shopeeShortLink(url.split('?')[0], ['cupomradar', normSlot(slot)], shopeeCreds);
         converted++;
         if (!destino) { const c0 = url.split('?')[0]; if (isProductPage(c0)) destino = c0; }
       } else if (store === 'mercadolivre' && affIds[store]) {
@@ -477,7 +478,8 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
         if (!destino && isProductPage(url)) destino = url;
       }
       if (final) {
-        final = await shortenUrl(final, userId, slot);
+        // Link direto (opção do painel): publica o afiliado puro, sem /r/ e sem contagem de cliques
+        if (!linkPrefs[userId]) final = await shortenUrl(final, userId, slot);
         out = out.split(raw).join(final);
       }
     } catch (e) {
@@ -489,14 +491,17 @@ async function convertTextLinks(text, affIds, shopeeCreds, mlMattTool, userId, s
   return { out, converted, destino };
 }
 
+const linkPrefs = {}; // userId -> true = link direto do afiliado (sem /r/)
+
 async function loadCopiadores() {
   if (!pool) return;
   try {
-    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8)', ['shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'shopee_api', 'boasvindas']);
+    const { rows } = await pool.query('SELECT "userId", provider, config FROM "Integration" WHERE provider IN ($1,$2,$3,$4,$5,$6,$7,$8,$9)', ['shopee', 'amazon', 'magalu', 'mercadolivre', 'shein', 'cupons', 'shopee_api', 'boasvindas', 'link_prefs']);
     const byUser = {};
     for (const r of rows) {
       byUser[r.userId] = byUser[r.userId] || { affIds: {} };
       if (r.provider === 'boasvindas') byUser[r.userId].boasvindas = r.config || {};
+      else if (r.provider === 'link_prefs') linkPrefs[r.userId] = !!(r.config || {}).rawLink;
       else if (r.provider === 'shopee_api' && r.config && r.config.appId && r.config.secret) byUser[r.userId].shopeeCreds = { appId: r.config.appId, secret: r.config.secret };
       else if (r.provider === 'mercadolivre' && r.config) {
         if (r.config.mattTool) byUser[r.userId].mlMattTool = r.config.mattTool;
