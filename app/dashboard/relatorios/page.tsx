@@ -23,9 +23,9 @@ export default function Relatorios() {
     <>
       <h1 className="h1">Relatórios</h1>
       <div className="grid grid-3">
-        <div className="card"><small className="hint">ENVIADOS (TOTAL)</small><div className="price">{sent}</div></div>
-        <div className="card"><small className="hint">FALHAS (TOTAL)</small><div className="price">{failed}</div></div>
-        <div className="card"><small className="hint">DISPAROS (TOTAL)</small><div className="price">{sent + failed}</div></div>
+        <div className="card"><small className="hint">ENVIADOS (TOTAL)</small><div className="price">{totals || logs.length ? sent : <span className="skel" style={{ display: 'block', height: 26 }}>&nbsp;</span>}</div></div>
+        <div className="card"><small className="hint">FALHAS (TOTAL)</small><div className="price">{totals || logs.length ? failed : <span className="skel" style={{ display: 'block', height: 26 }}>&nbsp;</span>}</div></div>
+        <div className="card"><small className="hint">DISPAROS (TOTAL)</small><div className="price">{totals || logs.length ? sent + failed : <span className="skel" style={{ display: 'block', height: 26 }}>&nbsp;</span>}</div></div>
       </div>
       <div className="card" style={{ marginTop: 16 }}>
         <h3>📱 Cliques</h3>

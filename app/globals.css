@@ -336,3 +336,61 @@ body.light .op-mini { background: #f1f5fa; }
   .op-mini b { font-size: 16px; }
   .op-num code { display: none; }
 }
+
+/* ===== PREMIUM: movimento, esqueletos e polimento ===== */
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes pop { 0% { opacity: 0; transform: scale(.92) translateY(8px); } 100% { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide { 100% { transform: translateX(100%); } }
+
+/* Entrada escalonada do conteúdo (toca ao montar cada tela) */
+.dash > *, .container > * { animation: rise .5s cubic-bezier(.16,.8,.3,1) both; }
+.dash > *:nth-child(2), .container > *:nth-child(2) { animation-delay: .05s; }
+.dash > *:nth-child(3), .container > *:nth-child(3) { animation-delay: .1s; }
+.dash > *:nth-child(4), .container > *:nth-child(4) { animation-delay: .15s; }
+.dash > *:nth-child(5), .container > *:nth-child(5) { animation-delay: .2s; }
+.dash > *:nth-child(6), .container > *:nth-child(6) { animation-delay: .25s; }
+.dash > *:nth-child(7), .container > *:nth-child(7) { animation-delay: .3s; }
+.dash > *:nth-child(n+8), .container > *:nth-child(n+8) { animation-delay: .35s; }
+
+/* Modal e FAB com presença */
+.overlay { animation: fade .18s ease both; }
+.modal { animation: pop .3s cubic-bezier(.2,1.2,.4,1) both; }
+.help-fab { animation: pop .35s .25s cubic-bezier(.2,1.2,.4,1) both; }
+.help-fab:hover { transform: translateY(-2px) scale(1.03); }
+
+/* Micro-interações */
+.btn { transition: transform .12s ease, opacity .15s, box-shadow .2s, background-color .2s, border-color .2s; }
+.btn-primary:hover { transform: translateY(-1px); }
+.btn:active { transform: scale(.97); }
+.nav-item { transition: background-color .15s, color .15s, transform .1s; }
+.nav-item:active { transform: scale(.98); }
+.tabitem { transition: color .2s, background-color .2s; }
+.tabitem .tabico { display: inline-block; transition: transform .2s cubic-bezier(.3,1.4,.5,1); }
+.tabitem.active .tabico { transform: scale(1.18); }
+.op-tgl { transition: background-color .2s; }
+.op-tgl::after { transition: left .22s cubic-bezier(.3,1.4,.5,1), right .22s cubic-bezier(.3,1.4,.5,1); }
+.op-rule, .op-offer, .quick-card { transition: transform .12s ease, border-color .15s, box-shadow .2s; }
+.op-rule:hover, .op-offer:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+a { transition: color .15s; }
+
+/* Profundidade premium nos cards */
+.card { box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 10px 30px -18px rgba(0,0,0,.7); }
+body.light .card { box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 10px 26px -18px rgba(15,23,42,.25); }
+
+/* Esqueleto de carregamento */
+.skel { position: relative; overflow: hidden; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; color: transparent !important; user-select: none; pointer-events: none; }
+.skel::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.09), transparent); animation: slide 1.3s infinite; }
+body.light .skel::after { background: linear-gradient(90deg, transparent, rgba(15,23,42,.08), transparent); }
+
+/* Foco visível, seleção e rolagem */
+:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; border-radius: 6px; }
+::selection { background: var(--green); color: #0b1105; }
+.sidebar::-webkit-scrollbar { width: 8px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+
+/* Respeito a quem prefere sem movimento */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
+}

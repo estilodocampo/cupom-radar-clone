@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 
 type Stats = { plan?: string; postsToday?: number; scheduledPending?: number; sentTotal?: number };
@@ -43,6 +43,28 @@ function hourOf(iso?: string): string {
   } catch { return ''; }
 }
 
+// Contagem animada (só na primeira carga; respeita reduced-motion)
+function useCountUp(target: number | null | undefined) {
+  const [val, setVal] = useState(0);
+  const animated = useRef(false);
+  useEffect(() => {
+    if (target == null) return;
+    if (animated.current) { setVal(target); return; }
+    animated.current = true;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setVal(target); return; }
+    const t0 = performance.now(), dur = 900;
+    let raf = 0;
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / dur);
+      setVal(Math.round((target || 0) * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+  return val;
+}
+
 export default function Overview() {
   const { data: session } = useSession();
   const [stats, setStats] = useState<Stats | null>(null);
@@ -53,6 +75,9 @@ export default function Overview() {
   const [offers, setOffers] = useState<Dispatch[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const first = (session?.user?.name || session?.user?.email || '').split(/[\s@]/)[0] || 'você';
+  const nPosts = useCountUp(stats?.postsToday);
+  const nFila = useCountUp(stats?.scheduledPending);
+  const nEnv = useCountUp(stats?.sentTotal);
   const [toggling, setToggling] = useState<string | null>(null);
   const [regrasProntas, setRegrasProntas] = useState(false);
 
@@ -160,9 +185,9 @@ export default function Overview() {
           );
         })}
         <div className="op-today">
-          <div className="op-mini"><small>CRIADAS HOJE</small><b>{stats?.postsToday ?? '…'}</b></div>
-          <div className="op-mini"><small>NA FILA</small><b>{stats?.scheduledPending ?? '…'}</b></div>
-          <div className="op-mini"><small>DISPAROS</small><b>{stats?.sentTotal ?? '…'}</b></div>
+          <div className="op-mini"><small>CRIADAS HOJE</small><b>{stats ? nPosts : <span className="skel" style={{ display: 'block', height: 22 }}>&nbsp;</span>}</b></div>
+          <div className="op-mini"><small>NA FILA</small><b>{stats ? nFila : <span className="skel" style={{ display: 'block', height: 22 }}>&nbsp;</span>}</b></div>
+          <div className="op-mini"><small>DISPAROS</small><b>{stats ? nEnv : <span className="skel" style={{ display: 'block', height: 22 }}>&nbsp;</span>}</b></div>
         </div>
       </div>
 

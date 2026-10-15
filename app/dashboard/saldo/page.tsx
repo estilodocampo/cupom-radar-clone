@@ -42,9 +42,10 @@ export default function Saldo() {
   const [shopee, setShopee] = useState<Shopee | null>(null);
   const [saldos, setSaldos] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState('');
+  const [pronto, setPronto] = useState(false);
 
   useEffect(() => {
-    fetch('/api/links/stats').then((r) => r.json()).then((d) => setByStore(d.byStore || [])).catch(() => {});
+    fetch('/api/links/stats').then((r) => r.json()).then((d) => { setByStore(d.byStore || []); setPronto(true); }).catch(() => setPronto(true));
     fetch('/api/shopee/report').then((r) => r.json()).then(setShopee).catch(() => setShopee({ error: 'Falha ao consultar' }));
     fetch('/api/integrations').then((r) => r.json()).then((d) => {
       const it = (d?.items || []).find((x: { provider: string }) => x.provider === 'saldos');
@@ -123,9 +124,9 @@ export default function Saldo() {
               {s.panel ? <a href={s.panel} target="_blank" rel="noreferrer">painel ↗</a> : null}
             </div>
             <div className="op-today">
-              <div className="op-mini"><small>LINKS</small><b>{v.links}</b></div>
-              <div className="op-mini"><small>CLIQUES</small><b>{v.clicks}</b></div>
-              <div className="op-mini"><small>MÉDIA</small><b>{v.links ? br(v.clicks / v.links, 1) : '0'}</b></div>
+              <div className="op-mini"><small>LINKS</small><b>{pronto ? v.links : <span className="skel" style={{ display: 'block', height: 20 }}>&nbsp;</span>}</b></div>
+              <div className="op-mini"><small>CLIQUES</small><b>{pronto ? v.clicks : <span className="skel" style={{ display: 'block', height: 20 }}>&nbsp;</span>}</b></div>
+              <div className="op-mini"><small>MÉDIA</small><b>{pronto ? (v.links ? br(v.clicks / v.links, 1) : '0') : <span className="skel" style={{ display: 'block', height: 20 }}>&nbsp;</span>}</b></div>
             </div>
           </div>
         );
