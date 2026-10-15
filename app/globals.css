@@ -231,10 +231,13 @@ a.card { text-decoration: none; color: inherit; display: block; }
   }
   .topbar-app { padding: 10px 14px; }
   .tabbar {
-    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 55;
-    background: rgba(10,15,30,.96); backdrop-filter: blur(10px); border-top: 1px solid var(--border);
-    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    display: flex; position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 55;
+    background: rgba(13,17,32,.9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border); border-radius: 24px;
+    padding: 8px 6px; box-shadow: 0 18px 44px -12px rgba(0,0,0,.7);
+    animation: dockUp .45s .15s cubic-bezier(.2,1.1,.4,1) both;
   }
+  @keyframes dockUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
   body.light .tabbar { background: rgba(255,255,255,.97); }
   body.mob-open .tabbar { display: none; }
   .tabitem {
@@ -248,7 +251,7 @@ a.card { text-decoration: none; color: inherit; display: block; }
   .container { padding: 16px 14px 116px; }
   .step { flex-direction: column; }
   .step-num { min-width: 0; }
-  .help-fab { bottom: 78px; right: 12px; padding: 9px 14px; font-size: 13px; max-width: calc(100vw - 24px); }
+  .help-fab { bottom: 96px; right: 12px; padding: 9px 14px; font-size: 13px; max-width: calc(100vw - 24px); }
   .orbit { display: none; }
   .modal { padding: 18px; border-radius: 14px; }
   .qr-box img { width: 190px; }
@@ -394,3 +397,56 @@ body.light .skel::after { background: linear-gradient(90deg, transparent, rgba(1
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
 }
+
+/* ===== PREMIUM v2: aurora, vidro, dock, brilhos ===== */
+
+/* Aurora ambiente atrás de tudo */
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(600px 420px at 10% -5%, rgba(184,241,53,.07), transparent 60%),
+    radial-gradient(720px 520px at 96% 18%, rgba(167,139,250,.06), transparent 60%),
+    radial-gradient(820px 620px at 50% 112%, rgba(14,165,233,.05), transparent 60%);
+}
+.shell { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  body::before { animation: drift 60s ease-in-out infinite alternate; }
+  @keyframes drift { to { transform: scale(1.08) translateY(-2%); } }
+}
+
+/* Sidebar em vidro + marca com brilho */
+.sidebar {
+  background: linear-gradient(180deg, rgba(22,28,48,.88), rgba(11,15,30,.94));
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+body.light .sidebar { background: rgba(232,238,246,.9); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.brand-badge { box-shadow: 0 4px 16px rgba(184,241,53,.35); }
+.nav-item.active { box-shadow: 0 6px 18px rgba(184,241,53,.28); }
+.avatar { box-shadow: 0 0 0 2px var(--bg2), 0 0 0 3.5px rgba(184,241,53,.45); }
+
+/* Topbar com profundidade */
+.topbar-app { box-shadow: 0 1px 0 var(--border), 0 14px 34px -18px rgba(0,0,0,.7); }
+
+/* CTA com brilho varrendo no hover */
+.btn-primary { position: relative; overflow: hidden; }
+.btn-primary::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 60px; left: -80px;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.5), transparent);
+  transform: skewX(-20deg); pointer-events: none;
+}
+.btn-primary:hover::after { animation: sheen .7s ease; }
+@keyframes sheen { to { left: calc(100% + 80px); } }
+
+/* Status da operação com anel de energia quando ativa */
+.op-status.live { box-shadow: 0 0 0 1px rgba(184,241,53,.35), 0 14px 44px -14px rgba(184,241,53,.3); }
+
+/* Títulos de seção com marcador */
+.op-sec h3 { position: relative; padding-left: 12px; }
+.op-sec h3::before { content: ''; position: absolute; left: 0; top: 3px; bottom: 3px; width: 3px; border-radius: 3px; background: linear-gradient(180deg, var(--green), var(--green2)); }
+
+/* Login com presença */
+.auth-card { box-shadow: 0 0 0 1px rgba(184,241,53,.22), 0 30px 80px -20px rgba(0,0,0,.8); }
+
+/* Hover com brilho nos cards */
+.card:hover { border-color: rgba(184,241,53,.3); }
+.price { letter-spacing: -.5px; }

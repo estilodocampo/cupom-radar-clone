@@ -166,7 +166,7 @@ export default function Overview() {
         <p className="sub" style={{ margin: 0 }}>Conexões, regras e ofertas.</p>
       </div>
 
-      <div className="op-status">
+      <div className={`op-status${anyOn ? ' live' : ''}`}>
         <div className="op-status-head">
           <span className="op-pulse" style={estado === 2 ? undefined : { background: corEstado, boxShadow: `0 0 8px ${corEstado}` }} />
           <span style={{ color: corEstado }}>{txtEstado}</span>
