@@ -13,6 +13,7 @@ Arquitetura escolhida para **custo mínimo**: web + worker WhatsApp no **mesmo s
 > **Memória:** 512 MB atende Next + 2 números na operação normal. Se os logs mostrarem reinício por falta de memória durante envios com foto, troque o plano do serviço para `1c-2g` (US$ 25) — o disco e o banco continuam os mesmos.
 
 ## 1. Reativar o Railway só para o dump
+> Para pagar menos Railway, inverta a ordem: aplique o Blueprint (passo 2) primeiro e só reative o Railway quando o Render já estiver de pé. O dump precisa dos dois lados ativos ao mesmo tempo.
 1. Railway → projeto → **Billing** → ative o plano Hobby (US$ 5, temporário).
 2. Espere o **Postgres** voltar a ficar Online.
 3. **Pause o serviço `cupom-radar-wa`** (Settings → Pause) para ele não voltar a disparar mensagens.
