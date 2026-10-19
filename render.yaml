@@ -7,17 +7,18 @@ databases:
   - name: cupom-radar-db
     databaseName: cupom_radar
     user: cupom_radar
-    plan: basic-256mb
+    plan: 0.1c-256mb
+    postgresMajorVersion: '16'
     region: oregon
 
 services:
   - type: web
     name: cupom-radar
     runtime: node
-    plan: starter
+    plan: 0.5c-512mb
     region: oregon
     branch: main
-    autoDeploy: true
+    autoDeployTrigger: commit
     # Build: instala devDeps (Prisma CLI) e compila o Next.
     buildCommand: npm ci --include=dev && npm run build
     # O projeto usa db push (sem migrations): mantém o schema sincronizado.
