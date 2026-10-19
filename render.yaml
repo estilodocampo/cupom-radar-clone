@@ -1,0 +1,98 @@
+# Blueprint do Render — Cupom Radar
+# Web (Next.js) + Worker WhatsApp (privado, com disco) + Postgres.
+# Aplique em: Render Dashboard → New → Blueprint → repositório estilodocampo/cupom-radar-clone
+
+databases:
+  - name: cupom-radar-db
+    databaseName: cupom_radar
+    user: cupom_radar
+    plan: basic-256mb
+    region: oregon
+
+services:
+  # ---------- Aplicação web ----------
+  - type: web
+    name: cupom-radar-web
+    runtime: node
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci --include=dev && npm run build
+    # Mantém o schema igual ao Prisma a cada deploy (o projeto usa db push, não migrations).
+    preDeployCommand: npx prisma db push --skip-generate
+    startCommand: npm run start:web
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cupom-radar-db
+          property: connectionString
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      # Troque para a URL final (https://app.estilodocampo.com.br) quando o DNS apontar.
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: WORKER_URL
+        value: http://cupom-radar-wa:3001
+      - key: WORKER_TOKEN
+        fromService:
+          type: pserv
+          name: cupom-radar-wa
+          envVarKey: WORKER_TOKEN
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ABACATEPAY_API_KEY
+        sync: false
+      - key: ABACATEPAY_WEBHOOK_SECRET
+        sync: false
+      - key: ML_CLIENT_ID
+        sync: false
+      - key: ML_CLIENT_SECRET
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+
+  # ---------- Worker WhatsApp (Baileys) ----------
+  # Serviço privado: o web fala com ele por http://cupom-radar-wa:3001.
+  # O disco /data guarda a sessão dos dois números entre deploys/restarts.
+  - type: pserv
+    name: cupom-radar-wa
+    runtime: node
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci --include=dev
+    startCommand: npm run start:wa
+    disk:
+      name: wa-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cupom-radar-db
+          property: connectionString
+      - key: WORKER_TOKEN
+        generateValue: true
+      - key: AUTH_DIR
+        value: /data/auth
+      - key: PORT
+        value: 3001
+      - key: WEB_URL
+        sync: false
+      - key: LOG_LEVEL
+        value: info
