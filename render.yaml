@@ -24,7 +24,8 @@ services:
     # O projeto usa db push (sem migrations): mantém o schema sincronizado.
     preDeployCommand: npx prisma db push --skip-generate
     # Sobe o worker (porta 3001 interna) + Next (PORT do Render).
-    startCommand: npm run start:all
+    # Chamamos o Node direto para o SIGTERM chegar ao supervisor sem camada do npm.
+    startCommand: node scripts/all.js
     healthCheckPath: /api/health
     disk:
       name: wa-data

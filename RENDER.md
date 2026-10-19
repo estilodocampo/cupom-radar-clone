@@ -10,6 +10,8 @@ Arquitetura escolhida para **custo mínimo**: web + worker WhatsApp no **mesmo s
 
 > Não use o Postgres free: ele expira e você perde os dados. O worker também não pode dormir — o WhatsApp desconectaria.
 
+> **Memória:** 512 MB atende Next + 2 números na operação normal. Se os logs mostrarem reinício por falta de memória durante envios com foto, troque o plano do serviço para `1c-2g` (US$ 25) — o disco e o banco continuam os mesmos.
+
 ## 1. Reativar o Railway só para o dump
 1. Railway → projeto → **Billing** → ative o plano Hobby (US$ 5, temporário).
 2. Espere o **Postgres** voltar a ficar Online.
