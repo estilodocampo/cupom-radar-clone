@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { toast } from '@/components/chrome';
 
 type Stats = { plan?: string; postsToday?: number; scheduledPending?: number; sentTotal?: number };
 type Slot = { connected?: boolean; phone?: string };
@@ -94,7 +95,12 @@ export default function Overview() {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: r.id, name: r.name || '', slot: r.slot || 'wa1', source: r.source || '', hub: r.hub || '', keepCoupons: !!r.keepCoupons, active }),
         });
-        if (!res.ok) setCop((cs) => cs.map((x) => (x.id === id ? { ...x, active: !active } : x)));
+        if (!res.ok) {
+          setCop((cs) => cs.map((x) => (x.id === id ? { ...x, active: !active } : x)));
+          toast('Não foi possível alterar a regra', 'err');
+        } else {
+          toast(`${active ? 'Regra ativada' : 'Regra pausada'} · ${r.name || r.slot || ''}`.trim(), active ? 'ok' : 'info');
+        }
       } else {
         const r = dis.find((x) => x.id === id);
         if (!r) return;
@@ -104,8 +110,17 @@ export default function Overview() {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...r, pausado }),
         });
-        if (!res.ok) setDis((ds) => ds.map((x) => (x.id === id ? { ...x, pausado: !pausado } : x)));
+        if (!res.ok) {
+          setDis((ds) => ds.map((x) => (x.id === id ? { ...x, pausado: !pausado } : x)));
+          toast('Não foi possível alterar a regra', 'err');
+        } else {
+          toast(`${pausado ? 'Regra pausada' : 'Regra ativada'} · ${r.name || r.slot || ''}`.trim(), pausado ? 'info' : 'ok');
+        }
       }
+    } catch {
+      if (kind === 'cop') setCop((cs) => cs.map((x) => (x.id === id ? { ...x, active: !x.active } : x)));
+      else setDis((ds) => ds.map((x) => (x.id === id ? { ...x, pausado: !x.pausado } : x)));
+      toast('Falha de conexão · tente novamente', 'err');
     } finally {
       setToggling(null);
     }
