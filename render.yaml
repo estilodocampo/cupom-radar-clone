@@ -1,6 +1,7 @@
 # Blueprint do Render — Cupom Radar
-# Web (Next.js) + Worker WhatsApp (privado, com disco) + Postgres.
-# Aplique em: Render Dashboard → New → Blueprint → repositório estilodocampo/cupom-radar-clone
+# Web (Next.js) + worker WhatsApp (Baileys) no MESMO serviço, com disco em /data.
+# Custo: 1 serviço Starter (~US$ 7) + Postgres Basic (~US$ 6) ≈ US$ 13/mês.
+# Aplique em: Render Dashboard → New → Blueprint → estilodocampo/cupom-radar-clone
 
 databases:
   - name: cupom-radar-db
@@ -10,69 +11,20 @@ databases:
     region: oregon
 
 services:
-  # ---------- Aplicação web ----------
   - type: web
-    name: cupom-radar-web
+    name: cupom-radar
     runtime: node
     plan: starter
     region: oregon
     branch: main
     autoDeploy: true
+    # Build: instala devDeps (Prisma CLI) e compila o Next.
     buildCommand: npm ci --include=dev && npm run build
-    # Mantém o schema igual ao Prisma a cada deploy (o projeto usa db push, não migrations).
+    # O projeto usa db push (sem migrations): mantém o schema sincronizado.
     preDeployCommand: npx prisma db push --skip-generate
-    startCommand: npm run start:web
+    # Sobe o worker (porta 3001 interna) + Next (PORT do Render).
+    startCommand: npm run start:all
     healthCheckPath: /api/health
-    envVars:
-      - key: NODE_VERSION
-        value: 20
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: cupom-radar-db
-          property: connectionString
-      - key: NEXTAUTH_SECRET
-        generateValue: true
-      # Troque para a URL final (https://app.estilodocampo.com.br) quando o DNS apontar.
-      - key: NEXTAUTH_URL
-        sync: false
-      - key: WORKER_URL
-        value: http://cupom-radar-wa:3001
-      - key: WORKER_TOKEN
-        fromService:
-          type: pserv
-          name: cupom-radar-wa
-          envVarKey: WORKER_TOKEN
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: ABACATEPAY_API_KEY
-        sync: false
-      - key: ABACATEPAY_WEBHOOK_SECRET
-        sync: false
-      - key: ML_CLIENT_ID
-        sync: false
-      - key: ML_CLIENT_SECRET
-        sync: false
-      - key: ADMIN_EMAILS
-        sync: false
-      - key: LOG_LEVEL
-        value: info
-
-  # ---------- Worker WhatsApp (Baileys) ----------
-  # Serviço privado: o web fala com ele por http://cupom-radar-wa:3001.
-  # O disco /data guarda a sessão dos dois números entre deploys/restarts.
-  - type: pserv
-    name: cupom-radar-wa
-    runtime: node
-    plan: starter
-    region: oregon
-    branch: main
-    autoDeploy: true
-    buildCommand: npm ci --include=dev
-    startCommand: npm run start:wa
     disk:
       name: wa-data
       mountPath: /data
@@ -86,13 +38,33 @@ services:
         fromDatabase:
           name: cupom-radar-db
           property: connectionString
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      # URL final. No primeiro teste pode ser https://cupom-radar-xxxx.onrender.com
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: WEB_URL
+        sync: false
+      # Worker roda no mesmo container: sempre localhost.
+      - key: WORKER_URL
+        value: http://127.0.0.1:3001
       - key: WORKER_TOKEN
         generateValue: true
       - key: AUTH_DIR
         value: /data/auth
-      - key: PORT
-        value: 3001
-      - key: WEB_URL
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ABACATEPAY_API_KEY
+        sync: false
+      - key: ABACATEPAY_WEBHOOK_SECRET
+        sync: false
+      - key: ML_CLIENT_ID
+        sync: false
+      - key: ML_CLIENT_SECRET
+        sync: false
+      - key: ADMIN_EMAILS
         sync: false
       - key: LOG_LEVEL
         value: info

@@ -1,69 +1,73 @@
 # Migração para o Render
 
-O projeto já está preparado: `render.yaml` cria **web + worker WhatsApp + Postgres** de uma vez.
+Arquitetura escolhida para **custo mínimo**: web + worker WhatsApp no **mesmo serviço**, com um disco de 1 GB em `/data`. O worker escuta só em `127.0.0.1:3001`.
 
-## Custo estimado
 | Recurso | Plano | Aprox. |
 |---|---|---|
-| Web (Next.js) | Starter | US$ 7/mês |
-| Worker WhatsApp (privado + disco 1 GB) | Starter | US$ 7/mês |
+| Serviço único (Next + Baileys + disco) | Starter | US$ 7/mês |
 | Postgres 256 MB | Basic | US$ 6/mês |
+| **Total** | | **~US$ 13/mês** |
 
-> O worker **não pode** ser free: precisa de disco persistente e de ficar sempre acordado para o Baileys.
+> Não use o Postgres free: ele expira e você perde os dados. O worker também não pode dormir — o WhatsApp desconectaria.
 
-## 1. Aplicar o Blueprint
-1. Acesse [dashboard.render.com](https://dashboard.render.com) → **New → Blueprint**.
+## 1. Reativar o Railway só para o dump
+1. Railway → projeto → **Billing** → ative o plano Hobby (US$ 5, temporário).
+2. Espere o **Postgres** voltar a ficar Online.
+3. **Pause o serviço `cupom-radar-wa`** (Settings → Pause) para ele não voltar a disparar mensagens.
+4. Postgres → **Connect** → copie a **Public Network** URL.
+
+## 2. Aplicar o Blueprint no Render
+1. [dashboard.render.com](https://dashboard.render.com) → **New → Blueprint**.
 2. Conecte o GitHub e escolha `estilodocampo/cupom-radar-clone`.
-3. O Render lê o `render.yaml` e mostra os 3 recursos. Confirme o plano e clique em **Apply**.
-
-## 2. Preencher as variáveis (marcadas `sync: false`)
-No serviço **cupom-radar-web** → Environment:
+3. Confirme o serviço `cupom-radar` e o banco `cupom-radar-db` (~US$ 13/mês) → **Apply**.
+4. Preencha as variáveis `sync: false` no serviço **cupom-radar**:
 
 | Variável | Valor |
 |---|---|
 | `NEXTAUTH_URL` | `https://app.estilodocampo.com.br` (ou a URL `onrender.com` no primeiro teste) |
-| `GOOGLE_CLIENT_ID` | o mesmo do Railway |
-| `GOOGLE_CLIENT_SECRET` | o mesmo do Railway |
-| `ABACATEPAY_API_KEY` | o mesmo do Railway |
-| `ABACATEPAY_WEBHOOK_SECRET` | o mesmo do Railway |
+| `WEB_URL` | a mesma URL acima |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | os mesmos do Railway |
+| `ABACATEPAY_API_KEY` / `ABACATEPAY_WEBHOOK_SECRET` | os mesmos do Railway |
 | `ML_CLIENT_ID` | `1653415201948706` |
 | `ML_CLIENT_SECRET` | o mesmo do Railway |
 | `ADMIN_EMAILS` | o mesmo do Railway |
 
-No **cupom-radar-wa** → Environment:
+`DATABASE_URL`, `NEXTAUTH_SECRET` e `WORKER_TOKEN` são gerados automaticamente.
 
-| Variável | Valor |
-|---|---|
-| `WEB_URL` | `https://app.estilodocampo.com.br` |
+> Se o primeiro deploy falhar por falta de `NEXTAUTH_URL`, preencha e use **Manual Deploy → Deploy latest commit**.
 
-`DATABASE_URL`, `WORKER_TOKEN` e `NEXTAUTH_SECRET` são gerados/conectados automaticamente.
+## 3. Migrar os dados (Railway → Render)
+Com o serviço já criado (as tabelas existem após o primeiro deploy):
 
-> Se o `NEXTAUTH_URL` ficar com a URL `onrender.com`, faça login por lá primeiro. Ao mudar para o domínio próprio, usuários precisam entrar de novo (o cookie muda de host).
+1. Render → **cupom-radar-db** → **Connect** → copie a **External Database URL**.
+2. Na raiz do projeto, copie o modelo e preencha:
+   ```powershell
+   Copy-Item .env.migrate.example .env.migrate
+   notepad .env.migrate
+   ```
+   ```env
+   SOURCE_DATABASE_URL=postgresql://...   # Railway (Public Network)
+   TARGET_DATABASE_URL=postgresql://...   # Render (External)
+   ```
+3. Rode:
+   ```powershell
+   node scripts/migrate.js
+   ```
+   O script copia todas as tabelas em lotes, sem duplicar se rodar de novo, e reativa as FKs.
 
-## 3. Dados: escolha um caminho
+> O arquivo `.env.migrate` está no `.gitignore` e não vai para o repositório.
 
-### A) Começar limpo (mais rápido)
-O `render.yaml` roda `prisma db push` no deploy e cria todas as tabelas.
-- Criar a conta novamente (e-mail ou Google);
-- Reconectar wa1/wa2 lendo o QR em **Robô**;
-- Recriar regras e canais.
+## 4. Reconectar o WhatsApp
+O `/data/auth` do Railway não é exportável pelo CLI. Pareie de novo:
+1. Abra **Robô** no Render e leia o QR do `wa1`.
+2. Repita para o `wa2`.
+3. Faça um envio de teste em **Envio**.
 
-### B) Trazer os dados do Railway
-Exige reativar o Railway por algumas horas (o trial expirou e o Postgres está offline).
-```bash
-# 1) pegue a DATABASE_URL pública no painel do Railway (Postgres → Connect)
-pg_dump "$RAILWAY_DATABASE_URL" --no-owner --no-acl -f backup.sql
+A sessão fica no disco `/data` e sobrevive a deploys/restarts.
 
-# 2) pegue a External Database URL no Render (cupom-radar-db → Connect)
-psql "$RENDER_EXTERNAL_URL" -f backup.sql
-```
-Depois, no Render, rode um **Manual Deploy → Clear build cache & deploy** (o `db push` reconcilia o schema).
-
-**Sessão do WhatsApp:** o `/data/auth` do Railway não é exportável facilmente pelo CLI. O caminho prático é reconectar os dois números pelo QR no Render (leva ~1 minuto cada).
-
-## 4. Domínio
-Em **cupom-radar-web → Settings → Custom Domains**, adicione `app.estilodocampo.com.br`.
-No seu provedor de DNS, troque o registro atual (Railway) por:
+## 5. Domínio
+Em **cupom-radar → Settings → Custom Domains**, adicione `app.estilodocampo.com.br`.
+No provedor de DNS, troque o destino atual (Railway) por:
 
 ```
 Tipo: CNAME
@@ -71,16 +75,20 @@ Nome: app
 Valor: <seu-serviço>.onrender.com
 ```
 
-Mantenha o mesmo domínio para **não** precisar alterar:
-- redirect URI do Google (`https://app.estilodocampo.com.br/api/auth/callback/google`);
+Mantendo o mesmo domínio, **não** é preciso alterar:
+- redirect URI do Google (`.../api/auth/callback/google`);
 - redirect URI do Mercado Livre;
 - webhook do AbacatePay.
 
-## 5. Validar
+## 6. Validar
 1. `https://app.estilodocampo.com.br/api/health` → `{"ok":true,"db":"up"}`.
-2. Login e abrir **Robô** → QR dos dois números.
-3. Enviar um teste em **Envio** (foto + link curto).
-4. Conferir logs do worker: deve aparecer `worker http no ar`.
+2. Login e conferir **Saldo/Relatórios** (dados migrados).
+3. **Robô** com os dois números conectados.
+4. Teste real de envio com foto + link curto.
+5. Logs do Render: `[all] iniciando worker e web` e `worker http no ar`.
+
+## 7. Encerrar o Railway
+Depois de validar por 1–2 dias, cancele o plano do Railway. Nada no Render depende dele.
 
 ## Rollback
-O Railway continua com o código e os volumes intactos. Se algo falhar, basta reativar o plano e apontar o DNS de volta — nada é apagado no Render durante os testes.
+Enquanto o Railway estiver ativo, o rollback é só apontar o DNS de volta. O disco e o banco do Render podem ser apagados depois.

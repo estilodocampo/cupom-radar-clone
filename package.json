@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "node scripts/build.js",
     "start": "node scripts/start.js",
+    "start:all": "node scripts/all.js",
     "start:web": "next start",
     "start:wa": "node worker/index.js",
     "postinstall": "prisma generate"
